@@ -1,4 +1,4 @@
-add_executable(siliconia main.cpp)
+add_executable(siliconia main.cpp chunks/chunk.cpp chunks/chunk_collection.cpp)
 
 target_compile_features(siliconia PUBLIC cxx_std_20)
 
