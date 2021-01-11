@@ -5,6 +5,8 @@
 
 int main(int argc, char **argv)
 {
+  // std::getchar();
+
   auto asc_file = siliconia::chunks::Chunk{"C:/Users/matth/Documents/lidar/TL45nw/tl4055_DSM_2M.asc"};
   std::cout << asc_file.data.size() << std::endl;
 	
@@ -16,5 +18,6 @@ int main(int argc, char **argv)
     std::cout << e.what() << std::endl;
     return 1;
   }
+  // std::getchar();
   return 0;
 }

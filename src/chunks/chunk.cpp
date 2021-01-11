@@ -3,6 +3,8 @@
 #include <sstream>
 #include <algorithm>
 #include <locale>
+#include <charconv>
+#include <iostream>
 
 namespace siliconia::chunks {
   
@@ -45,21 +47,32 @@ rect rect::operator|(const rect &other) const
 Chunk::Chunk(const std::string &path)
   : cell_size(0), nrows(0), ncols(0), xllcorner(0), yllcorner(0), data()
 {
-  auto stream = std::ifstream{path.c_str(), std::ios::in};
+  auto stream = std::ifstream{path.c_str(), std::ios::binary | std::ios::ate};
+  auto size = stream.tellg();
+  stream.seekg(0, std::ios::beg);
+  auto s = std::vector<char>(size);
+  stream.read(s.data(), size);
+
   auto n = 1;
-  auto line = std::string{};
   bool in_numbers = false;
-  while (std::getline(stream, line)) {
-    auto sv = std::string_view{line};
+
+  auto last_pos = s.begin();
+  auto pos = std::find(s.begin(), s.end(), '\n');
+  
+  while (pos != s.end()) {
+    auto sv = std::string_view{last_pos, pos};
     if (!in_numbers) {
       if (!parse_header(path, n, sv)) {
         in_numbers = true;
       }
     }
     if (in_numbers) {
-      parse_numbers(path, n, line);
+      parse_numbers(path, n, sv);
     }
     n++;
+
+    last_pos = pos + 1;
+    pos = std::find(last_pos, s.end(), '\n');
   }
 }
 
@@ -98,7 +111,7 @@ bool Chunk::parse_header(const std::string &path, int n, std::string_view sv)
   return true;
 }
 
-void Chunk::parse_numbers(const std::string &path, int n, const std::string &line)
+void Chunk::parse_numbers(const std::string &path, int n, std::string_view line)
 {
   auto spaces = std::count_if(line.begin(), line.end(), [](char c) { return std::isspace(c); });
   if (spaces == line.size()) {
@@ -107,8 +120,8 @@ void Chunk::parse_numbers(const std::string &path, int n, const std::string &lin
   auto last_pos = size_t{0};
   auto pos = line.find(' ');
   while (true) {
-    auto num = line.substr(0, pos);
-    auto f = std::atof(num.c_str());
+    double f = 0.0;
+    auto res = std::from_chars(line.data() + last_pos, line.data() + pos, f);
     if (f == nodata_value_) {
       data.push_back({});
     } else {
@@ -119,8 +132,8 @@ void Chunk::parse_numbers(const std::string &path, int n, const std::string &lin
       break;
     }
 
-    last_pos = pos;
-    pos = line.find(' ', last_pos+1);
+    last_pos = pos + 1;
+    pos = line.find(' ', last_pos);
   }
 }
 
@@ -128,7 +141,7 @@ rect Chunk::rect() const
 {
   auto w = ncols * cell_size;
   auto h = nrows * cell_size;
-  return { xllcorner, yllcorner - h, w, h};
+  return {xllcorner, yllcorner - h, w, h};
 }
 
 }

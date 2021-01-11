@@ -45,7 +45,7 @@ public:
   
 private:
   bool parse_header(const std::string &path, int n, std::string_view sv);
-  void parse_numbers(const std::string &path, int n, const std::string &line);
+  void parse_numbers(const std::string &path, int n, std::string_view line);
 
   // Only used in init
   double nodata_value_;
