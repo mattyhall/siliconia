@@ -1,43 +1,57 @@
 #include "chunk.hpp"
-#include <fstream>
-#include <sstream>
 #include <algorithm>
-#include <locale>
 #include <charconv>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <utility>
 
 namespace siliconia::chunks {
-  
-asc_parse_exception::asc_parse_exception(const std::string &filename, int line, std::string explaination)
-  : std::exception()
-  , filename_(filename)
-  , line_(line)
-  , explaination_(explaination) {}
 
-const char *asc_parse_exception::what () const throw ()
+asc_parse_exception::asc_parse_exception(
+    std::string filename, int line, std::string explaination)
+  : std::exception()
+  , filename_(std::move(filename))
+  , line_(line)
+  , explaination_(std::move(explaination))
 {
   auto ss = std::ostringstream{};
-  ss << "Couldn't parse " << filename_ << ", error at line " << line_ << ": " << explaination_;
-  return ss.str().c_str(); 
+  ss << "Couldn't parse " << filename_ << ", error at line " << line_ << ": "
+     << explaination_;
+  what_ = ss.str();
+}
+
+const char *asc_parse_exception::what() const noexcept
+{
+  return what_.c_str();
 }
 
 rect::rect(unsigned int x, unsigned int y, unsigned int w, unsigned int h)
   : x(x), y(y), width(w), height(h)
-{}
+{
+}
 
-rect::rect(std::pair<unsigned int, unsigned int> top_left, std::pair<unsigned int, unsigned int> bottom_right)
+rect::rect(std::pair<unsigned int, unsigned int> top_left,
+    std::pair<unsigned int, unsigned int> bottom_right)
   : x(top_left.first)
   , y(top_left.second)
   , width(bottom_right.first - top_left.first)
   , height(bottom_right.second - top_left.second)
-{}
+{
+}
 
-unsigned int rect::right() const { return x + width; }
-unsigned int rect::bottom() const { return y + height; }
+unsigned int rect::right() const
+{
+  return x + width;
+}
+unsigned int rect::bottom() const
+{
+  return y + height;
+}
 
 rect rect::operator|(const rect &other) const
 {
-  auto l  = std::min(x, other.x);
+  auto l = std::min(x, other.x);
   auto r = std::max(right(), other.right());
   auto t = std::min(y, other.y);
   auto b = std::max(bottom(), other.bottom());
@@ -47,6 +61,7 @@ rect rect::operator|(const rect &other) const
 Chunk::Chunk(const std::string &path)
   : cell_size(0), nrows(0), ncols(0), xllcorner(0), yllcorner(0), data()
 {
+  std::cout << "Parsing " << path << std::endl;
   auto stream = std::ifstream{path.c_str(), std::ios::binary | std::ios::ate};
   auto size = stream.tellg();
   stream.seekg(0, std::ios::beg);
@@ -58,7 +73,7 @@ Chunk::Chunk(const std::string &path)
 
   auto last_pos = s.begin();
   auto pos = std::find(s.begin(), s.end(), '\n');
-  
+
   while (pos != s.end()) {
     auto sv = std::string_view{last_pos, pos};
     if (!in_numbers) {
@@ -91,7 +106,9 @@ bool Chunk::parse_header(const std::string &path, int n, std::string_view sv)
     return false;
   }
   auto v_pos = pos;
-  while (sv[v_pos] == ' ') { v_pos++; }
+  while (sv[v_pos] == ' ') {
+    v_pos++;
+  }
   auto v = sv.substr(v_pos);
   if (k == "ncols") {
     ncols = std::atoi(std::string{v}.c_str());
@@ -113,7 +130,8 @@ bool Chunk::parse_header(const std::string &path, int n, std::string_view sv)
 
 void Chunk::parse_numbers(const std::string &path, int n, std::string_view line)
 {
-  auto spaces = std::count_if(line.begin(), line.end(), [](char c) { return std::isspace(c); });
+  auto spaces = std::count_if(
+      line.begin(), line.end(), [](char c) { return std::isspace(c); });
   if (spaces == line.size()) {
     return;
   }
@@ -121,13 +139,14 @@ void Chunk::parse_numbers(const std::string &path, int n, std::string_view line)
   auto pos = line.find(' ');
   while (true) {
     double f = 0.0;
-    auto res = std::from_chars(line.data() + last_pos, line.data() + pos, f);
+    auto end = std::min(pos, line.size());
+    std::from_chars(line.data() + last_pos, line.data() + end, f);
     if (f == nodata_value_) {
       data.push_back({});
     } else {
       data.push_back(f);
     }
-    
+
     if (pos == std::string::npos) {
       break;
     }
@@ -144,4 +163,4 @@ rect Chunk::rect() const
   return {xllcorner, yllcorner - h, w, h};
 }
 
-}
+} // namespace siliconia::chunks

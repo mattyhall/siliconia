@@ -3,7 +3,8 @@
 
 namespace siliconia::chunks {
 
-ChunkCollection::ChunkCollection(const std::string &path) : rect(0, 0, 0, 0) , chunks_()
+ChunkCollection::ChunkCollection(const std::string &path)
+  : rect(0, 0, 0, 0), chunks_()
 {
   auto first = true;
   for (const auto &p : std::filesystem::directory_iterator{path}) {
@@ -18,4 +19,4 @@ ChunkCollection::ChunkCollection(const std::string &path) : rect(0, 0, 0, 0) , c
   }
 }
 
-}
+} // namespace siliconia::chunks
