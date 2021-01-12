@@ -58,8 +58,53 @@ rect rect::operator|(const rect &other) const
   return {{l, t}, {r, b}};
 }
 
+void rect::operator|=(const rect &other)
+{
+  *this = *this | other;
+}
+
+range::range()
+  : min(std::numeric_limits<double>::max())
+  , max(std::numeric_limits<double>::min())
+{
+}
+
+range::range(double min, double max) : min(min), max(max)
+{
+}
+
+range range::operator|(const range &other) const
+{
+  return range{std::min(min, other.min), std::max(max, other.max)};
+}
+
+void range::operator|=(const range &other)
+{
+  *this = *this | other;
+}
+void range::extend(double n)
+{
+  if (n < min) {
+    min = n;
+  }
+  if (n > max) {
+    max = n;
+  }
+}
+
+double range::size()
+{
+  return max-min;
+}
+
 Chunk::Chunk(const std::string &path)
-  : cell_size(0), nrows(0), ncols(0), xllcorner(0), yllcorner(0), data()
+  : cell_size(0)
+  , nrows(0)
+  , ncols(0)
+  , xllcorner(0)
+  , yllcorner(0)
+  , data()
+  , range()
 {
   std::cout << "Parsing " << path << std::endl;
   auto stream = std::ifstream{path.c_str(), std::ios::binary | std::ios::ate};
@@ -144,6 +189,7 @@ void Chunk::parse_numbers(const std::string &path, int n, std::string_view line)
     if (f == nodata_value_) {
       data.push_back({});
     } else {
+      range.extend(f);
       data.push_back(f);
     }
 
@@ -162,5 +208,4 @@ rect Chunk::rect() const
   auto h = nrows * cell_size;
   return {xllcorner, yllcorner - h, w, h};
 }
-
 } // namespace siliconia::chunks

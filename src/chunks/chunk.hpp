@@ -28,8 +28,24 @@ struct rect {
 
   // Naughty
   rect operator|(const rect &other) const;
+  void operator|=(const rect &other);
 
   unsigned int x, y, width, height;
+};
+
+struct range {
+public:
+  range();
+  range(double min, double max);
+
+  void extend(double n);
+
+  double size();
+
+  range operator|(const range &other) const;
+  void operator|=(const range &other);
+
+  double min, max;
 };
 
 class Chunk {
@@ -38,6 +54,7 @@ public:
 
   rect rect() const;
 
+  range range;
   unsigned int cell_size;
   unsigned int nrows;
   unsigned int ncols;

@@ -13,10 +13,15 @@ ChunkCollection::ChunkCollection(const std::string &path)
       first = false;
       rect = chunk.rect();
     } else {
-      rect = rect | chunk.rect();
+      rect |= chunk.rect();
     }
+    range |= chunk.range;
     chunks_.push_back(std::move(chunk));
   }
+}
+const std::vector<Chunk> &ChunkCollection::chunks() const
+{
+  return chunks_;
 }
 
 } // namespace siliconia::chunks
