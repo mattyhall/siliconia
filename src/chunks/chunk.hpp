@@ -9,7 +9,7 @@ namespace siliconia::chunks {
 class asc_parse_exception : public std::exception {
 public:
   asc_parse_exception(std::string filename, int line, std::string explaination);
-  const char *what() const noexcept;
+  const char *what() const noexcept override;
 
 private:
   std::string filename_;
@@ -40,7 +40,7 @@ public:
 
   void extend(double n);
 
-  double size();
+  double size() const;
 
   range operator|(const range &other) const;
   void operator|=(const range &other);
@@ -50,7 +50,7 @@ public:
 
 class Chunk {
 public:
-  Chunk(const std::string &path);
+  explicit Chunk(const std::string &path);
 
   rect rect() const;
 

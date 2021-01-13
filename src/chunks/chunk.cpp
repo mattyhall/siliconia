@@ -92,7 +92,7 @@ void range::extend(double n)
   }
 }
 
-double range::size()
+double range::size() const
 {
   return max-min;
 }
@@ -105,6 +105,7 @@ Chunk::Chunk(const std::string &path)
   , yllcorner(0)
   , data()
   , range()
+  , nodata_value_(std::numeric_limits<double>::min())
 {
   std::cout << "Parsing " << path << std::endl;
   auto stream = std::ifstream{path.c_str(), std::ios::binary | std::ios::ate};
