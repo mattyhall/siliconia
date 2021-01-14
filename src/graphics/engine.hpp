@@ -15,10 +15,39 @@ public:
   void init();
   void draw(const siliconia::chunks::ChunkCollection &chunks, SDL_Renderer *renderer);
   void run(const siliconia::chunks::ChunkCollection &chunks);
-  void run();
+
 private:
+  void init_vulkan();
+  void init_swapchain();
+  void init_commands();
+  void init_default_renderpass();
+  void init_framebuffers();
+  void init_sync_structures();
+
   VkExtent2D  win_size_;
   SDL_Window *window_;
+
+  VkInstance instance_;
+  VkDebugUtilsMessengerEXT  debug_messenger_;
+  VkDevice device_;
+  VkSurfaceKHR surface_;
+  VkPhysicalDevice chosen_gpu_;
+
+  VkSwapchainKHR swapchain_;
+  VkFormat swapchain_image_format_;
+  std::vector<VkImage> swapchain_images_;
+  std::vector<VkImageView> swapchain_image_views_;
+
+  VkQueue graphics_queue_;
+  uint32_t  graphics_queue_family_;
+  VkCommandPool command_pool_;
+  VkCommandBuffer main_command_buffer_;
+
+  VkRenderPass renderpass_;
+  std::vector<VkFramebuffer> framebuffers_;
+
+  VkSemaphore present_semaphore_, render_semaphore_;
+  VkFence render_fence_;
 };
 
 } // namespace siliconia::graphics
