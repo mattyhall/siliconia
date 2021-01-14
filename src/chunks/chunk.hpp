@@ -36,16 +36,16 @@ struct rect {
 struct range {
 public:
   range();
-  range(double min, double max);
+  range(float min, float max);
 
-  void extend(double n);
+  void extend(float n);
 
-  double size() const;
+  float size() const;
 
   range operator|(const range &other) const;
   void operator|=(const range &other);
 
-  double min, max;
+  float min, max;
 };
 
 class Chunk {
@@ -60,14 +60,14 @@ public:
   unsigned int ncols;
   unsigned int xllcorner;
   unsigned int yllcorner;
-  std::vector<std::optional<double>> data;
+  std::vector<float> data;
+  float nodata_value;
 
 private:
   bool parse_header(const std::string &path, int n, std::string_view sv);
   void parse_numbers(const std::string &path, int n, std::string_view line);
 
   // Only used in init
-  double nodata_value_;
 };
 
 } // namespace siliconia::chunks

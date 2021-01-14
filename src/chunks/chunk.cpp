@@ -64,12 +64,12 @@ void rect::operator|=(const rect &other)
 }
 
 range::range()
-  : min(std::numeric_limits<double>::max())
-  , max(std::numeric_limits<double>::min())
+  : min(std::numeric_limits<float>::max())
+  , max(std::numeric_limits<float>::min())
 {
 }
 
-range::range(double min, double max) : min(min), max(max)
+range::range(float min, float max) : min(min), max(max)
 {
 }
 
@@ -82,7 +82,7 @@ void range::operator|=(const range &other)
 {
   *this = *this | other;
 }
-void range::extend(double n)
+void range::extend(float n)
 {
   if (n < min) {
     min = n;
@@ -92,7 +92,7 @@ void range::extend(double n)
   }
 }
 
-double range::size() const
+float range::size() const
 {
   return max-min;
 }
@@ -105,7 +105,7 @@ Chunk::Chunk(const std::string &path)
   , yllcorner(0)
   , data()
   , range()
-  , nodata_value_(std::numeric_limits<double>::min())
+  , nodata_value(std::numeric_limits<float>::min())
 {
   std::cout << "Parsing " << path << std::endl;
   auto stream = std::ifstream{path.c_str(), std::ios::binary | std::ios::ate};
@@ -167,7 +167,7 @@ bool Chunk::parse_header(const std::string &path, int n, std::string_view sv)
   } else if (k == "cellsize") {
     cell_size = std::atoi(std::string{v}.c_str());
   } else if (k == "NODATA_value") {
-    nodata_value_ = std::atof(std::string{v}.c_str());
+    nodata_value = std::atof(std::string{v}.c_str());
   } else {
     throw asc_parse_exception{path, n, "Unexpected key"};
   }
@@ -184,15 +184,13 @@ void Chunk::parse_numbers(const std::string &path, int n, std::string_view line)
   auto last_pos = size_t{0};
   auto pos = line.find(' ');
   while (true) {
-    double f = 0.0;
+    float f = 0.0;
     auto end = std::min(pos, line.size());
     std::from_chars(line.data() + last_pos, line.data() + end, f);
-    if (f == nodata_value_) {
-      data.push_back({});
-    } else {
+    if (f != nodata_value) {
       range.extend(f);
-      data.push_back(f);
     }
+    data.push_back(f);
 
     if (pos == std::string::npos) {
       break;

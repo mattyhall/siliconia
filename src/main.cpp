@@ -11,9 +11,9 @@ struct colour {
 };
 
 struct gradient_point {
-  gradient_point(double point, colour colour) : point(point), colour(colour) {}
+  gradient_point(float point, colour colour) : point(point), colour(colour) {}
 
-  double point;
+  float point;
   colour colour;
 };
 
@@ -51,8 +51,8 @@ void main_loop(
       for (unsigned int j = 0; j < chunk.nrows; j++) {
         for (unsigned int i = 0; i < chunk.ncols; i++) {
           auto val = chunk.data[i + j * chunk.ncols];
-          if (val) {
-            auto scaled = *val / range.size();
+          if (val != chunk.nodata_value) {
+            auto scaled = val / range.size();
             for (int g = 0; g < gradient.size(); g++) {
               auto pt = gradient[g];
               if (g == gradient.size() - 1) {
