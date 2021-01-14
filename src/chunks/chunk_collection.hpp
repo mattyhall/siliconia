@@ -1,3 +1,6 @@
+#ifndef SILICONIA_CHUNK_COLLECTION_HPP
+#define SILICONIA_CHUNK_COLLECTION_HPP
+
 #include "chunk.hpp"
 #include <string>
 #include <vector>
@@ -18,3 +21,5 @@ private:
 };
 
 } // namespace siliconia::chunks
+
+#endif

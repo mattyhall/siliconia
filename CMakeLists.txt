@@ -4,6 +4,8 @@ project ("siliconia")
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
+find_package(Vulkan REQUIRED)
+
 add_library(sdl2 INTERFACE)
 set(sdl2_DIR "SDL_PATH" CACHE FILEPATH "Path to SDL2")
 
@@ -18,3 +20,4 @@ endif()
 target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
 
 add_subdirectory(src)
+add_subdirectory(third_party)
