@@ -23,6 +23,8 @@ private:
   void init_default_renderpass();
   void init_framebuffers();
   void init_sync_structures();
+  bool load_shader_module(const char *path, VkShaderModule *shader_module);
+  void init_piplines();
 
   VkExtent2D  win_size_;
   SDL_Window *window_;
@@ -48,6 +50,9 @@ private:
 
   VkSemaphore present_semaphore_, render_semaphore_;
   VkFence render_fence_;
+
+  VkPipelineLayout  pipeline_layout_;
+  VkPipeline pipeline_;
 };
 
 } // namespace siliconia::graphics

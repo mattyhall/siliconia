@@ -5,3 +5,4 @@ bin/
 out/
 CMakeSettings.json
 cmake-build*/
+shaders/*.*.spv

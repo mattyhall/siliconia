@@ -1,8 +1,11 @@
 #include "engine.hpp"
 #include "VkBootstrap.h"
+#include "pipeline_builder.hpp"
+#include "vk_init.hpp"
 #include <SDL_vulkan.h>
 #include <array>
 #include <chunks/chunk_collection.hpp>
+#include <fstream>
 #include <iostream>
 
 #define VK_CHECK(x)                                                            \
@@ -64,6 +67,7 @@ void Engine::init()
   init_default_renderpass();
   init_framebuffers();
   init_sync_structures();
+  init_piplines();
 }
 
 void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
@@ -108,15 +112,21 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     rp_info.framebuffer = framebuffers_[swapchain_image_index];
     rp_info.clearValueCount = 1;
     rp_info.pClearValues = &clear_val;
+
     vkCmdBeginRenderPass(
         main_command_buffer_, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(main_command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+    vkCmdDraw(main_command_buffer_, 3, 1, 0, 0);
+
     vkCmdEndRenderPass(main_command_buffer_);
 
     VK_CHECK(vkEndCommandBuffer(main_command_buffer_));
 
     auto submit_info = VkSubmitInfo{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkPipelineStageFlags wait_stage =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     submit_info.pWaitDstStageMask = &wait_stage;
     submit_info.waitSemaphoreCount = 1;
     submit_info.pWaitSemaphores = &present_semaphore_;
@@ -135,8 +145,6 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     present_info.pImageIndices = &swapchain_image_index;
     VK_CHECK(vkQueuePresentKHR(graphics_queue_, &present_info));
     frame_number++;
-
-
 
     //    draw(chunks, renderer);
   }
@@ -330,6 +338,67 @@ void Engine::init_sync_structures()
       device_, &semaphore_create_info, nullptr, &present_semaphore_));
   VK_CHECK(vkCreateSemaphore(
       device_, &semaphore_create_info, nullptr, &render_semaphore_));
+}
+bool Engine::load_shader_module(const char *path, VkShaderModule *shader_module)
+{
+  auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
+  if (!file.is_open())
+    return false;
+
+  auto file_size = file.tellg();
+  auto buffer = std::vector<uint32_t>(file_size / sizeof(uint32_t));
+  file.seekg(0);
+  file.read((char *)buffer.data(), file_size);
+  file.close();
+
+  auto create_info = VkShaderModuleCreateInfo{};
+  create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  create_info.codeSize = buffer.size() * sizeof(uint32_t);
+  create_info.pCode = buffer.data();
+
+  if (vkCreateShaderModule(device_, &create_info, nullptr, shader_module) !=
+      VK_SUCCESS)
+    return false;
+
+  return true;
+}
+void Engine::init_piplines()
+{
+  auto frag = VkShaderModule{};
+  if (!load_shader_module("../shaders/triangle.frag.spv", &frag)) {
+    std::cout << "Could not load frag shader" << std::endl;
+  }
+  auto vertex = VkShaderModule{};
+  if (!load_shader_module("../shaders/triangle.vert.spv", &vertex)) {
+    std::cout << "Could not load vert shader" << std::endl;
+  }
+
+  auto layout_info = init::pipeline_layout_create_info();
+  VK_CHECK(vkCreatePipelineLayout(device_, &layout_info, nullptr, &pipeline_layout_));
+
+  auto builder = PipelineBuilder{};
+  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertex));
+  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, frag));
+  builder.vertex_input_info = init::vertex_input_state_create_info();
+  builder.assembly = init::input_assembly_state_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+  builder.viewport.x = 0.0f;
+  builder.viewport.y = 0.0f;
+  builder.viewport.width = (float)win_size_.width;
+  builder.viewport.height = (float)win_size_.height;
+  builder.viewport.minDepth = 0.0f;
+  builder.viewport.maxDepth = 1.0f;
+
+  builder.scissor.offset = {0, 0};
+  builder.scissor.extent = win_size_;
+
+  builder.rasteriser = init::rasterisation_state_create_info(VK_POLYGON_MODE_FILL);
+  builder.multisampling = init::multisample_state_create_info();
+  builder.colour_blend_attachment = init::colour_blend_attachment_state();
+  builder.layout = pipeline_layout_;
+
+  pipeline_ = builder.build_pipeline(device_, renderpass_);
+
 }
 
 } // namespace siliconia::graphics

@@ -1,4 +1,7 @@
-add_executable(siliconia main.cpp chunks/chunk.cpp chunks/chunk_collection.cpp graphics/engine.cpp graphics/engine.hpp)
+add_executable(siliconia main.cpp
+        chunks/chunk.cpp chunks/chunk_collection.cpp
+        graphics/engine.cpp graphics/engine.hpp
+        graphics/pipeline_builder.cpp graphics/pipeline_builder.hpp graphics/vk_init.hpp graphics/vk_init.cpp)
 
 target_compile_features(siliconia PUBLIC cxx_std_20)
 

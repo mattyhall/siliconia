@@ -6,6 +6,13 @@
 #include <iostream>
 #include <stdio.h>
 
+template<typename T>
+constexpr std::string vk_type(const T &x)
+{
+  auto name = typeid(T).name();
+  return name;
+}
+
 int main(int argc, char **argv)
 {
 
