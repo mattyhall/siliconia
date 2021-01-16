@@ -37,6 +37,15 @@ Engine::Engine(uint32_t width, uint32_t height) : win_size_({width, height})
 
 Engine::~Engine()
 {
+  vkWaitForFences(device_, 1, &render_fence_, true, 1e9);
+
+  vkDestroyPipeline(device_, pipeline_, nullptr);
+  vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+
+  vkDestroySemaphore(device_, present_semaphore_, nullptr);
+  vkDestroySemaphore(device_, render_semaphore_, nullptr);
+  vkDestroyFence(device_, render_fence_, nullptr);
+
   vkDestroyCommandPool(device_, command_pool_, nullptr);
 
   vkDestroySwapchainKHR(device_, swapchain_, nullptr);
@@ -339,6 +348,7 @@ void Engine::init_sync_structures()
   VK_CHECK(vkCreateSemaphore(
       device_, &semaphore_create_info, nullptr, &render_semaphore_));
 }
+
 bool Engine::load_shader_module(const char *path, VkShaderModule *shader_module)
 {
   auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
@@ -362,6 +372,7 @@ bool Engine::load_shader_module(const char *path, VkShaderModule *shader_module)
 
   return true;
 }
+
 void Engine::init_piplines()
 {
   auto frag = VkShaderModule{};
@@ -398,6 +409,9 @@ void Engine::init_piplines()
   builder.layout = pipeline_layout_;
 
   pipeline_ = builder.build_pipeline(device_, renderpass_);
+
+  vkDestroyShaderModule(device_, vertex, nullptr);
+  vkDestroyShaderModule(device_, frag, nullptr);
 
 }
 
