@@ -438,29 +438,42 @@ void Engine::load_meshes()
   auto gradient =
       std::array<gradient_point, 2>{{{0.0, {0, 0, 0}}, {1.0, {255, 0, 0}}}};
 
-  auto chunk = chunks_.chunks()[0];
-  auto cell_size = chunk.cell_size;
-  auto x_sf = 2.0f / ((float)chunk.rect().width / cell_size);
-  auto y_sf = 2.0f / ((float)chunk.rect().height / cell_size);
-  auto range = chunk.range;
-  for (unsigned int j = 0; j < chunk.nrows - 1; j++) {
-    for (unsigned int i = 0; i < chunk.ncols - 1; i++) {
-      auto vlt = chunk.data[i + j * chunk.ncols];
-      auto vrt = chunk.data[i + 1 + j * chunk.ncols];
-      auto vrb = chunk.data[i + 1 + (j + 1) * chunk.ncols];
-      auto vlb = chunk.data[i + (j + 1) * chunk.ncols];
-      auto clt = get_colour(gradient, chunk.nodata_value, range, vlt);
-      auto crt = get_colour(gradient, chunk.nodata_value, range, vrt);
-      auto crb = get_colour(gradient, chunk.nodata_value, range, vrb);
-      auto clb = get_colour(gradient, chunk.nodata_value, range, vlb);
+  auto cell_size = chunks_.chunks()[0].cell_size;
+  auto range = chunks_.range;
+  auto x_sf = 2.0f / ((float)chunks_.rect.width / cell_size);
+  auto y_sf = 2.0f / ((float)chunks_.rect.height / cell_size);
 
-      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, j * y_sf - 1, 0}, clt.to_glm()});
-      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, j * y_sf - 1, 0}, crt.to_glm()});
-      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, (j + 1) * y_sf - 1, 0}, clb.to_glm()});
+  for (const auto &chunk : chunks_.chunks()) {
+    auto x_offset = (chunk.rect().x - chunks_.rect.x) / cell_size;
+    auto y_offset = chunks_.rect.height / cell_size -
+                    (chunk.rect().y - chunks_.rect.y) / cell_size -
+                    chunk.rect().height / cell_size;
 
-      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, j * y_sf - 1, 0}, crt.to_glm()});
-      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, (j + 1) * y_sf - 1, 0}, crb.to_glm()});
-      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, (j + 1) * y_sf - 1, 0}, clb.to_glm()});
+    for (unsigned int j = 0; j < chunk.nrows - 1; j++) {
+      for (unsigned int i = 0; i < chunk.ncols - 1; i++) {
+        auto vlt = chunk.data[i + j * chunk.ncols];
+        auto vrt = chunk.data[i + 1 + j * chunk.ncols];
+        auto vrb = chunk.data[i + 1 + (j + 1) * chunk.ncols];
+        auto vlb = chunk.data[i + (j + 1) * chunk.ncols];
+        auto clt = get_colour(gradient, chunk.nodata_value, range, vlt);
+        auto crt = get_colour(gradient, chunk.nodata_value, range, vrt);
+        auto crb = get_colour(gradient, chunk.nodata_value, range, vrb);
+        auto clb = get_colour(gradient, chunk.nodata_value, range, vlb);
+
+        mesh_.vertices.push_back(
+            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, clt.to_glm()});
+        mesh_.vertices.push_back(
+            vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
+        mesh_.vertices.push_back(
+            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
+
+        mesh_.vertices.push_back(
+            vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
+        mesh_.vertices.push_back(vk::Vertex{
+            {(i + x_offset + 1) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, crb.to_glm()});
+        mesh_.vertices.push_back(
+            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
+      }
     }
   }
 
