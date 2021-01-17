@@ -64,8 +64,11 @@ Engine::~Engine()
 {
   vkWaitForFences(device_, 1, &render_fence_, true, 1e9);
 
-  vmaDestroyBuffer(
-      allocator_, mesh_.vertex_buffer.buffer, mesh_.vertex_buffer.allocation);
+  for (const auto &mesh : meshes_) {
+    vmaDestroyBuffer(
+        allocator_, mesh.vertex_buffer.buffer, mesh.vertex_buffer.allocation);
+  }
+
   vmaDestroyAllocator(allocator_);
 
   vkDestroyPipeline(device_, pipeline_, nullptr);
@@ -116,6 +119,8 @@ void Engine::run()
 
   uint32_t frame_number = 0;
 
+  auto start = std::chrono::system_clock::now();
+
   while (true) {
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT)
@@ -138,8 +143,11 @@ void Engine::run()
       auto rp = cmd_guard.begin_render_pass(renderpass_, win_size_,
           framebuffers_[swapchain_image_index], clear_val);
       rp.bind_pipeline(pipeline_);
-      rp.bind_vertex_buffers(0, 1, &mesh_.vertex_buffer.buffer);
-      rp.draw(mesh_.vertices.size(), 1, 0, 0);
+
+      for (const auto &mesh : meshes_) {
+        rp.bind_vertex_buffers(0, 1, &mesh.vertex_buffer.buffer);
+        rp.draw(mesh.vertices.size(), 1, 0, 0);
+      }
     }
 
     auto submit_info = VkSubmitInfo{};
@@ -166,7 +174,13 @@ void Engine::run()
     VK_CHECK(vkQueuePresentKHR(graphics_queue_, &present_info));
     frame_number++;
 
-    //        draw(chunks, renderer);
+    if (frame_number % 30 == 0) {
+      auto now = std::chrono::system_clock::now();
+      auto elapsed = now - start;
+      auto mili = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+      std::cout << "fps: " << 30.0 / ((float)mili.count() / 1000) << std::endl;
+      start = now;
+    }
   }
 }
 
@@ -444,6 +458,7 @@ void Engine::load_meshes()
   auto y_sf = 2.0f / ((float)chunks_.rect.height / cell_size);
 
   for (const auto &chunk : chunks_.chunks()) {
+    auto mesh = vk::Mesh{};
     auto x_offset = (chunk.rect().x - chunks_.rect.x) / cell_size;
     auto y_offset = chunks_.rect.height / cell_size -
                     (chunk.rect().y - chunks_.rect.y) / cell_size -
@@ -460,24 +475,25 @@ void Engine::load_meshes()
         auto crb = get_colour(gradient, chunk.nodata_value, range, vrb);
         auto clb = get_colour(gradient, chunk.nodata_value, range, vlb);
 
-        mesh_.vertices.push_back(
+        mesh.vertices.push_back(
             vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, clt.to_glm()});
-        mesh_.vertices.push_back(
+        mesh.vertices.push_back(
             vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
-        mesh_.vertices.push_back(
+        mesh.vertices.push_back(
             vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
 
-        mesh_.vertices.push_back(
+        mesh.vertices.push_back(
             vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
-        mesh_.vertices.push_back(vk::Vertex{
+        mesh.vertices.push_back(vk::Vertex{
             {(i + x_offset + 1) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, crb.to_glm()});
-        mesh_.vertices.push_back(
+        mesh.vertices.push_back(
             vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
       }
     }
+    upload_mesh(mesh);
+    meshes_.push_back(std::move(mesh));
   }
 
-  upload_mesh(mesh_);
 }
 
 void Engine::upload_mesh(vk::Mesh &mesh)

@@ -65,7 +65,7 @@ private:
 
   VmaAllocator allocator_;
 
-  vk::Mesh mesh_;
+  std::vector<vk::Mesh> meshes_;
 };
 
 } // namespace siliconia::graphics
