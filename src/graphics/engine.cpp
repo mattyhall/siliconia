@@ -8,6 +8,9 @@
 #include <fstream>
 #include <iostream>
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 #define VK_CHECK(x)                                                            \
   do {                                                                         \
     VkResult err = x;                                                          \
@@ -38,6 +41,10 @@ Engine::Engine(uint32_t width, uint32_t height) : win_size_({width, height})
 Engine::~Engine()
 {
   vkWaitForFences(device_, 1, &render_fence_, true, 1e9);
+
+  vmaDestroyBuffer(
+      allocator_, mesh_.vertex_buffer.buffer, mesh_.vertex_buffer.allocation);
+  vmaDestroyAllocator(allocator_);
 
   vkDestroyPipeline(device_, pipeline_, nullptr);
   vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
@@ -77,6 +84,7 @@ void Engine::init()
   init_framebuffers();
   init_sync_structures();
   init_piplines();
+  load_meshes();
 }
 
 void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
@@ -125,8 +133,14 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     vkCmdBeginRenderPass(
         main_command_buffer_, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(main_command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-    vkCmdDraw(main_command_buffer_, 3, 1, 0, 0);
+    vkCmdBindPipeline(
+        main_command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(
+        main_command_buffer_, 0, 1, &mesh_.vertex_buffer.buffer, &offset);
+
+    vkCmdDraw(main_command_buffer_, mesh_.vertices.size(), 1, 0, 0);
 
     vkCmdEndRenderPass(main_command_buffer_);
 
@@ -155,7 +169,7 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     VK_CHECK(vkQueuePresentKHR(graphics_queue_, &present_info));
     frame_number++;
 
-    //    draw(chunks, renderer);
+    //        draw(chunks, renderer);
   }
 }
 
@@ -241,6 +255,12 @@ void Engine::init_vulkan()
   graphics_queue_ = device.get_queue(vkb::QueueType::graphics).value();
   graphics_queue_family_ =
       device.get_queue_index(vkb::QueueType::graphics).value();
+
+  auto allocator_info = VmaAllocatorCreateInfo{};
+  allocator_info.physicalDevice = chosen_gpu_;
+  allocator_info.device = device_;
+  allocator_info.instance = instance_;
+  vmaCreateAllocator(&allocator_info, &allocator_);
 }
 
 void Engine::init_swapchain()
@@ -385,13 +405,16 @@ void Engine::init_piplines()
   }
 
   auto layout_info = init::pipeline_layout_create_info();
-  VK_CHECK(vkCreatePipelineLayout(device_, &layout_info, nullptr, &pipeline_layout_));
+  VK_CHECK(vkCreatePipelineLayout(
+      device_, &layout_info, nullptr, &pipeline_layout_));
 
   auto builder = PipelineBuilder{};
-  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertex));
-  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, frag));
-  builder.vertex_input_info = init::vertex_input_state_create_info();
-  builder.assembly = init::input_assembly_state_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(
+      VK_SHADER_STAGE_VERTEX_BIT, vertex));
+  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(
+      VK_SHADER_STAGE_FRAGMENT_BIT, frag));
+  builder.assembly = init::input_assembly_state_create_info(
+      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
   builder.viewport.x = 0.0f;
   builder.viewport.y = 0.0f;
@@ -403,16 +426,59 @@ void Engine::init_piplines()
   builder.scissor.offset = {0, 0};
   builder.scissor.extent = win_size_;
 
-  builder.rasteriser = init::rasterisation_state_create_info(VK_POLYGON_MODE_FILL);
+  builder.rasteriser =
+      init::rasterisation_state_create_info(VK_POLYGON_MODE_FILL);
   builder.multisampling = init::multisample_state_create_info();
   builder.colour_blend_attachment = init::colour_blend_attachment_state();
   builder.layout = pipeline_layout_;
+
+  auto desc = types::Vertex::get_vertex_description();
+  builder.vertex_input_info = init::vertex_input_state_create_info();
+  builder.vertex_input_info.pVertexAttributeDescriptions =
+      desc.attributes.data();
+  builder.vertex_input_info.vertexAttributeDescriptionCount =
+      desc.attributes.size();
+  builder.vertex_input_info.pVertexBindingDescriptions = desc.bindings.data();
+  builder.vertex_input_info.vertexBindingDescriptionCount =
+      desc.bindings.size();
 
   pipeline_ = builder.build_pipeline(device_, renderpass_);
 
   vkDestroyShaderModule(device_, vertex, nullptr);
   vkDestroyShaderModule(device_, frag, nullptr);
+}
 
+void Engine::load_meshes()
+{
+  mesh_.vertices.resize(3);
+  mesh_.vertices[0].position = {1, 1, 0};
+  mesh_.vertices[1].position = {-1, 1, 0};
+  mesh_.vertices[2].position = {0, -1, 0};
+
+  mesh_.vertices[0].colour = {0, 1, 0};
+  mesh_.vertices[1].colour = {0, 1, 0};
+  mesh_.vertices[2].colour = {0, 1, 0};
+
+  upload_mesh(mesh_);
+}
+
+void Engine::upload_mesh(types::Mesh &mesh)
+{
+  auto buffer_info = VkBufferCreateInfo{};
+  buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  buffer_info.size = mesh.vertices.size() * sizeof(types::Vertex);
+  buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+  auto alloc_info = VmaAllocationCreateInfo{};
+  alloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+  VK_CHECK(vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
+      &mesh.vertex_buffer.buffer, &mesh.vertex_buffer.allocation, nullptr));
+
+  void *data;
+  vmaMapMemory(allocator_, mesh.vertex_buffer.allocation, &data);
+  memcpy(
+      data, mesh.vertices.data(), mesh.vertices.size() * sizeof(types::Vertex));
+  vmaUnmapMemory(allocator_, mesh.vertex_buffer.allocation);
 }
 
 } // namespace siliconia::graphics
