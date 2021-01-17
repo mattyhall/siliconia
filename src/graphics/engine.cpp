@@ -1,10 +1,8 @@
 #include "engine.hpp"
 #include "VkBootstrap.h"
-#include "pipeline_builder.hpp"
-#include "vk_init.hpp"
+#include "graphics/vk/pipeline_builder.hpp"
 #include <SDL_vulkan.h>
 #include <array>
-#include <chunks/chunk_collection.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -404,16 +402,16 @@ void Engine::init_piplines()
     std::cout << "Could not load vert shader" << std::endl;
   }
 
-  auto layout_info = init::pipeline_layout_create_info();
+  auto layout_info = vk::pipeline_layout_create_info();
   VK_CHECK(vkCreatePipelineLayout(
       device_, &layout_info, nullptr, &pipeline_layout_));
 
-  auto builder = PipelineBuilder{};
-  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(
+  auto builder = vk::PipelineBuilder{};
+  builder.shader_stages.push_back(vk::pipeline_shader_stage_create_info(
       VK_SHADER_STAGE_VERTEX_BIT, vertex));
-  builder.shader_stages.push_back(init::pipeline_shader_stage_create_info(
+  builder.shader_stages.push_back(vk::pipeline_shader_stage_create_info(
       VK_SHADER_STAGE_FRAGMENT_BIT, frag));
-  builder.assembly = init::input_assembly_state_create_info(
+  builder.assembly = vk::input_assembly_state_create_info(
       VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
   builder.viewport.x = 0.0f;
@@ -427,13 +425,13 @@ void Engine::init_piplines()
   builder.scissor.extent = win_size_;
 
   builder.rasteriser =
-      init::rasterisation_state_create_info(VK_POLYGON_MODE_FILL);
-  builder.multisampling = init::multisample_state_create_info();
-  builder.colour_blend_attachment = init::colour_blend_attachment_state();
+      vk::rasterisation_state_create_info(VK_POLYGON_MODE_FILL);
+  builder.multisampling = vk::multisample_state_create_info();
+  builder.colour_blend_attachment = vk::colour_blend_attachment_state();
   builder.layout = pipeline_layout_;
 
-  auto desc = types::Vertex::get_vertex_description();
-  builder.vertex_input_info = init::vertex_input_state_create_info();
+  auto desc = vk::Vertex::get_vertex_description();
+  builder.vertex_input_info = vk::vertex_input_state_create_info();
   builder.vertex_input_info.pVertexAttributeDescriptions =
       desc.attributes.data();
   builder.vertex_input_info.vertexAttributeDescriptionCount =
@@ -462,11 +460,11 @@ void Engine::load_meshes()
   upload_mesh(mesh_);
 }
 
-void Engine::upload_mesh(types::Mesh &mesh)
+void Engine::upload_mesh(vk::Mesh &mesh)
 {
   auto buffer_info = VkBufferCreateInfo{};
   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  buffer_info.size = mesh.vertices.size() * sizeof(types::Vertex);
+  buffer_info.size = mesh.vertices.size() * sizeof(vk::Vertex);
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
   auto alloc_info = VmaAllocationCreateInfo{};
@@ -477,7 +475,7 @@ void Engine::upload_mesh(types::Mesh &mesh)
   void *data;
   vmaMapMemory(allocator_, mesh.vertex_buffer.allocation, &data);
   memcpy(
-      data, mesh.vertices.data(), mesh.vertices.size() * sizeof(types::Vertex));
+      data, mesh.vertices.data(), mesh.vertices.size() * sizeof(vk::Vertex));
   vmaUnmapMemory(allocator_, mesh.vertex_buffer.allocation);
 }
 

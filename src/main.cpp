@@ -1,21 +1,11 @@
 #include "chunks/chunk.hpp"
 #include "chunks/chunk_collection.hpp"
 #include <SDL.h>
-#include <array>
 #include <graphics/engine.hpp>
 #include <iostream>
-#include <stdio.h>
-
-template<typename T>
-constexpr std::string vk_type(const T &x)
-{
-  auto name = typeid(T).name();
-  return name;
-}
 
 int main(int argc, char **argv)
 {
-
   try {
     auto chunks = siliconia::chunks::ChunkCollection{
         "C:/Users/matth/Documents/lidar/TL45nw/"};

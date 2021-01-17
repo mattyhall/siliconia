@@ -1,7 +1,7 @@
 #include "pipeline_builder.hpp"
 #include <iostream>
 
-namespace siliconia::graphics {
+namespace siliconia::graphics::vk {
 
 VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VkRenderPass pass)
 {

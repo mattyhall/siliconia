@@ -1,12 +1,12 @@
-#ifndef SILICONIA_VK_TYPES_HPP
-#define SILICONIA_VK_TYPES_HPP
+#ifndef SILICONIA_TYPES_HPP
+#define SILICONIA_TYPES_HPP
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 #include <vector>
 #include <glm/vec3.hpp>
 
-namespace siliconia::graphics::types {
+namespace siliconia::graphics::vk {
 
 struct AllocatorBuffer {
   VkBuffer buffer;
@@ -33,4 +33,4 @@ struct Mesh {
 
 }
 
-#endif // SILICONIA_VK_TYPES_HPP
+#endif // SILICONIA_TYPES_HPP

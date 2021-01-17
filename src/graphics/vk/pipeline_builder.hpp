@@ -4,7 +4,7 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 
-namespace siliconia::graphics {
+namespace siliconia::graphics::vk {
 
 class PipelineBuilder {
 public:

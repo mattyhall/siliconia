@@ -1,11 +1,12 @@
 #ifndef SILICONIA_ENGINE_HPP
 #define SILICONIA_ENGINE_HPP
 
+#include "graphics/vk/init.hpp"
 #include <SDL.h>
 #include <chunks/chunk_collection.hpp>
+#include <graphics/vk/types.hpp>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
-#include "vk_types.hpp"
 
 namespace siliconia::graphics {
 
@@ -28,7 +29,7 @@ private:
   bool load_shader_module(const char *path, VkShaderModule *shader_module);
   void init_piplines();
   void load_meshes();
-  void upload_mesh(types::Mesh &mesh);
+  void upload_mesh(vk::Mesh &mesh);
 
   VkExtent2D  win_size_;
   SDL_Window *window_;
@@ -60,7 +61,7 @@ private:
 
   VmaAllocator allocator_;
 
-  types::Mesh mesh_;
+  vk::Mesh mesh_;
 };
 
 } // namespace siliconia::graphics

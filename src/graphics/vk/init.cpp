@@ -1,6 +1,6 @@
-#include "vk_init.hpp"
+#include "init.hpp"
 
-namespace siliconia::graphics::init {
+namespace siliconia::graphics::vk {
 
 VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(
     VkShaderStageFlagBits stage, VkShaderModule shader_module)

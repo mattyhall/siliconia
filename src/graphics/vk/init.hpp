@@ -1,9 +1,9 @@
-#ifndef SILICONIA_VK_INIT_HPP
-#define SILICONIA_VK_INIT_HPP
+#ifndef SILICONIA_INIT_HPP
+#define SILICONIA_INIT_HPP
 
 #include <vulkan/vulkan.h>
 
-namespace siliconia::graphics::init {
+namespace siliconia::graphics::vk {
 
 VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(
     VkShaderStageFlagBits stage, VkShaderModule shader_module);
@@ -23,4 +23,4 @@ VkPipelineLayoutCreateInfo pipeline_layout_create_info();
 
 } // namespace siliconia::graphics::init
 
-#endif // SILICONIA_VK_INIT_HPP
+#endif // SILICONIA_INIT_HPP

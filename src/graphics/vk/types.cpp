@@ -1,7 +1,6 @@
-#include "vk_types.hpp"
-#include <vulkan/vulkan.h>
+#include "types.hpp"
 
-namespace siliconia::graphics::types {
+namespace siliconia::graphics::vk {
 
 VertexInputDescription Vertex::get_vertex_description()
 {
