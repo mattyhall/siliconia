@@ -14,9 +14,9 @@ int main(int argc, char **argv)
               << " " << chunks.range.min << "-" << chunks.range.max
               << std::endl;
 
-    auto engine = siliconia::graphics::Engine{1200, 1200};
+    auto engine = siliconia::graphics::Engine{1200, 1200, std::move(chunks)};
     engine.init();
-    engine.run(chunks);
+    engine.run();
   } catch (const siliconia::chunks::asc_parse_exception &e) {
     std::cout << e.what() << std::endl;
     return 1;

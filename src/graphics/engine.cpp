@@ -14,6 +14,11 @@ namespace siliconia::graphics {
 
 struct colour {
   colour(uint8_t r, uint8_t g, uint8_t b) : r(r), g(g), b(b) {}
+
+  glm::vec3 to_glm() {
+    return {r / 255.0, g / 255.0, b / 255.0};
+  }
+
   uint8_t r, g, b;
 };
 
@@ -24,7 +29,34 @@ struct gradient_point {
   colour colour;
 };
 
-Engine::Engine(uint32_t width, uint32_t height) : win_size_({width, height})
+template<size_t N>
+colour get_colour(const std::array<gradient_point, N> &gradient,
+    float nodata_value, chunks::range range, float val)
+{
+  auto c = colour{255, 255, 255};
+  if (val != nodata_value) {
+    auto scaled = val / range.size();
+    for (int g = 0; g < gradient.size(); g++) {
+      auto pt = gradient[g];
+      if (g == gradient.size() - 1) {
+        c = pt.colour;
+      } else if (scaled >= pt.point && scaled < gradient[g + 1].point) {
+        auto pt_next = gradient[g + 1];
+        auto n = (scaled - pt.point) / (pt_next.point - pt.point);
+        c = colour{
+            (uint8_t)(pt.colour.r + (pt_next.colour.r - pt.colour.r) * n),
+            (uint8_t)(pt.colour.g + (pt_next.colour.g - pt.colour.g) * n),
+            (uint8_t)(pt.colour.b + (pt_next.colour.b - pt.colour.b) * n)};
+        break;
+      }
+    }
+  }
+  return c;
+}
+
+Engine::Engine(
+    uint32_t width, uint32_t height, chunks::ChunkCollection &&chunks)
+  : win_size_({width, height}), chunks_(chunks)
 {
 }
 
@@ -77,7 +109,7 @@ void Engine::init()
   load_meshes();
 }
 
-void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
+void Engine::run()
 {
   auto e = SDL_Event{};
   auto renderer = SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED);
@@ -138,9 +170,9 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
   }
 }
 
-void Engine::draw(
-    const siliconia::chunks::ChunkCollection &chunks, SDL_Renderer *renderer)
+void Engine::draw(SDL_Renderer *renderer)
 {
+  auto chunks = chunks_;
   auto gradient =
       std::array<gradient_point, 2>{{{0.0, {0, 0, 0}}, {1.0, {255, 0, 0}}}};
 
@@ -187,6 +219,8 @@ void Engine::draw(
         SDL_RenderDrawPoint(renderer, x_offset + i, y_offset + j);
       }
     }
+
+    break;
   }
 
   SDL_SetRenderTarget(renderer, nullptr);
@@ -401,14 +435,34 @@ void Engine::init_piplines()
 
 void Engine::load_meshes()
 {
-  mesh_.vertices.resize(3);
-  mesh_.vertices[0].position = {1, 1, 0};
-  mesh_.vertices[1].position = {-1, 1, 0};
-  mesh_.vertices[2].position = {0, -1, 0};
+  auto gradient =
+      std::array<gradient_point, 2>{{{0.0, {0, 0, 0}}, {1.0, {255, 0, 0}}}};
 
-  mesh_.vertices[0].colour = {0, 1, 0};
-  mesh_.vertices[1].colour = {0, 1, 0};
-  mesh_.vertices[2].colour = {0, 1, 0};
+  auto chunk = chunks_.chunks()[0];
+  auto cell_size = chunk.cell_size;
+  auto x_sf = 2.0f / ((float)chunk.rect().width / cell_size);
+  auto y_sf = 2.0f / ((float)chunk.rect().height / cell_size);
+  auto range = chunk.range;
+  for (unsigned int j = 0; j < chunk.nrows - 1; j++) {
+    for (unsigned int i = 0; i < chunk.ncols - 1; i++) {
+      auto vlt = chunk.data[i + j * chunk.ncols];
+      auto vrt = chunk.data[i + 1 + j * chunk.ncols];
+      auto vrb = chunk.data[i + 1 + (j + 1) * chunk.ncols];
+      auto vlb = chunk.data[i + (j + 1) * chunk.ncols];
+      auto clt = get_colour(gradient, chunk.nodata_value, range, vlt);
+      auto crt = get_colour(gradient, chunk.nodata_value, range, vrt);
+      auto crb = get_colour(gradient, chunk.nodata_value, range, vrb);
+      auto clb = get_colour(gradient, chunk.nodata_value, range, vlb);
+
+      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, j * y_sf - 1, 0}, clt.to_glm()});
+      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, j * y_sf - 1, 0}, crt.to_glm()});
+      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, (j + 1) * y_sf - 1, 0}, clb.to_glm()});
+
+      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, j * y_sf - 1, 0}, crt.to_glm()});
+      mesh_.vertices.push_back(vk::Vertex{{(i + 1) * x_sf - 1, (j + 1) * y_sf - 1, 0}, crb.to_glm()});
+      mesh_.vertices.push_back(vk::Vertex{{i * x_sf - 1, (j + 1) * y_sf - 1, 0}, clb.to_glm()});
+    }
+  }
 
   upload_mesh(mesh_);
 }

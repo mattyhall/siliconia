@@ -13,12 +13,12 @@ namespace siliconia::graphics {
 
 class Engine {
 public:
-  Engine(uint32_t width, uint32_t height);
+  Engine(uint32_t width, uint32_t height, chunks::ChunkCollection &&chunks);
   ~Engine();
 
   void init();
-  void draw(const siliconia::chunks::ChunkCollection &chunks, SDL_Renderer *renderer);
-  void run(const siliconia::chunks::ChunkCollection &chunks);
+  void draw(SDL_Renderer *renderer);
+  void run();
 
 private:
   void init_vulkan();
@@ -34,6 +34,8 @@ private:
 
   VkExtent2D  win_size_;
   SDL_Window *window_;
+
+  chunks::ChunkCollection chunks_;
 
   VkInstance instance_;
   VkDebugUtilsMessengerEXT  debug_messenger_;
