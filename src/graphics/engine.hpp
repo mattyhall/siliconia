@@ -4,6 +4,7 @@
 #include "graphics/vk/init.hpp"
 #include <SDL.h>
 #include <chunks/chunk_collection.hpp>
+#include <graphics/vk/command_buffer.hpp>
 #include <graphics/vk/types.hpp>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
@@ -47,8 +48,9 @@ private:
 
   VkQueue graphics_queue_;
   uint32_t  graphics_queue_family_;
-  VkCommandPool command_pool_;
-  VkCommandBuffer main_command_buffer_;
+
+  vk::CommandPool command_pool_;
+  vk::CommandBuffer main_command_buffer_;
 
   VkRenderPass renderpass_;
   std::vector<VkFramebuffer> framebuffers_;

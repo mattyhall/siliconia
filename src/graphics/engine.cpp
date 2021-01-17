@@ -1,6 +1,7 @@
 #include "engine.hpp"
 #include "VkBootstrap.h"
-#include "graphics/vk/pipeline_builder.hpp"
+#include "vk/helpers.hpp"
+#include "vk/pipeline_builder.hpp"
 #include <SDL_vulkan.h>
 #include <array>
 #include <fstream>
@@ -8,15 +9,6 @@
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-
-#define VK_CHECK(x)                                                            \
-  do {                                                                         \
-    VkResult err = x;                                                          \
-    if (err) {                                                                 \
-      std::cout << "Detected Vulkan error: " << err << std::endl;              \
-      abort();                                                                 \
-    }                                                                          \
-  } while (0)
 
 namespace siliconia::graphics {
 
@@ -51,7 +43,7 @@ Engine::~Engine()
   vkDestroySemaphore(device_, render_semaphore_, nullptr);
   vkDestroyFence(device_, render_fence_, nullptr);
 
-  vkDestroyCommandPool(device_, command_pool_, nullptr);
+  vkDestroyCommandPool(device_, command_pool_.pool(), nullptr);
 
   vkDestroySwapchainKHR(device_, swapchain_, nullptr);
   vkDestroyRenderPass(device_, renderpass_, nullptr);
@@ -104,45 +96,19 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     VK_CHECK(vkAcquireNextImageKHR(device_, swapchain_, 1e9, present_semaphore_,
         nullptr, &swapchain_image_index));
 
-    VK_CHECK(vkResetCommandBuffer(main_command_buffer_, 0));
+    main_command_buffer_.reset();
 
-    auto cmd_begin_info = VkCommandBufferBeginInfo{};
-    cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmd_begin_info.pNext = nullptr;
-    cmd_begin_info.pInheritanceInfo = nullptr;
-    cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    VK_CHECK(vkBeginCommandBuffer(main_command_buffer_, &cmd_begin_info));
-
-    auto clear_val = VkClearValue{};
-    auto flash = std::abs(std::sin(frame_number / 120.f));
-    clear_val.color = {{0.0f, 0.0f, flash, 1.0f}};
-
-    auto rp_info = VkRenderPassBeginInfo{};
-    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rp_info.pNext = nullptr;
-    rp_info.renderPass = renderpass_;
-    rp_info.renderArea.offset = {0, 0};
-    rp_info.renderArea.extent = win_size_;
-    rp_info.framebuffer = framebuffers_[swapchain_image_index];
-    rp_info.clearValueCount = 1;
-    rp_info.pClearValues = &clear_val;
-
-    vkCmdBeginRenderPass(
-        main_command_buffer_, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    vkCmdBindPipeline(
-        main_command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-
-    VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(
-        main_command_buffer_, 0, 1, &mesh_.vertex_buffer.buffer, &offset);
-
-    vkCmdDraw(main_command_buffer_, mesh_.vertices.size(), 1, 0, 0);
-
-    vkCmdEndRenderPass(main_command_buffer_);
-
-    VK_CHECK(vkEndCommandBuffer(main_command_buffer_));
+    {
+      auto cmd_guard = main_command_buffer_.begin();
+      auto clear_val = VkClearValue{};
+      auto flash = std::abs(std::sin(frame_number / 120.f));
+      clear_val.color = {{0.0f, 0.0f, flash, 1.0f}};
+      auto rp = cmd_guard.begin_render_pass(renderpass_, win_size_,
+          framebuffers_[swapchain_image_index], clear_val);
+      rp.bind_pipeline(pipeline_);
+      rp.bind_vertex_buffers(0, 1, &mesh_.vertex_buffer.buffer);
+      rp.draw(mesh_.vertices.size(), 1, 0, 0);
+    }
 
     auto submit_info = VkSubmitInfo{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -154,7 +120,8 @@ void Engine::run(const siliconia::chunks::ChunkCollection &chunks)
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &render_semaphore_;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &main_command_buffer_;
+    auto buf = main_command_buffer_.buffer();
+    submit_info.pCommandBuffers = &buf;
     VK_CHECK(vkQueueSubmit(graphics_queue_, 1, &submit_info, render_fence_));
 
     auto present_info = VkPresentInfoKHR{};
@@ -278,22 +245,8 @@ void Engine::init_swapchain()
 
 void Engine::init_commands()
 {
-  auto cmd_pool_info = VkCommandPoolCreateInfo{};
-  cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  cmd_pool_info.pNext = nullptr;
-  cmd_pool_info.queueFamilyIndex = graphics_queue_family_;
-  cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  VK_CHECK(
-      vkCreateCommandPool(device_, &cmd_pool_info, nullptr, &command_pool_));
-
-  auto cmd_alloc_info = VkCommandBufferAllocateInfo{};
-  cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  cmd_alloc_info.pNext = nullptr;
-  cmd_alloc_info.commandPool = command_pool_;
-  cmd_alloc_info.commandBufferCount = 1;
-  cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  VK_CHECK(vkAllocateCommandBuffers(
-      device_, &cmd_alloc_info, &main_command_buffer_));
+  command_pool_ = vk::CommandPool{device_, graphics_queue_family_};
+  main_command_buffer_ = command_pool_.allocate_buffer();
 }
 
 void Engine::init_default_renderpass()
@@ -411,8 +364,8 @@ void Engine::init_piplines()
       VK_SHADER_STAGE_VERTEX_BIT, vertex));
   builder.shader_stages.push_back(vk::pipeline_shader_stage_create_info(
       VK_SHADER_STAGE_FRAGMENT_BIT, frag));
-  builder.assembly = vk::input_assembly_state_create_info(
-      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+  builder.assembly =
+      vk::input_assembly_state_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
   builder.viewport.x = 0.0f;
   builder.viewport.y = 0.0f;
@@ -474,8 +427,7 @@ void Engine::upload_mesh(vk::Mesh &mesh)
 
   void *data;
   vmaMapMemory(allocator_, mesh.vertex_buffer.allocation, &data);
-  memcpy(
-      data, mesh.vertices.data(), mesh.vertices.size() * sizeof(vk::Vertex));
+  memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(vk::Vertex));
   vmaUnmapMemory(allocator_, mesh.vertex_buffer.allocation);
 }
 
