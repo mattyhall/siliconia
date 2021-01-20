@@ -29,6 +29,9 @@ struct Vertex {
 struct Mesh {
   std::vector<Vertex> vertices;
   AllocatorBuffer vertex_buffer;
+
+  std::vector<uint32_t> indices;
+  AllocatorBuffer index_buffer;
 };
 
 }

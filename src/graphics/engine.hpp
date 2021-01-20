@@ -17,7 +17,6 @@ public:
   ~Engine();
 
   void init();
-  void draw(SDL_Renderer *renderer);
   void run();
 
 private:

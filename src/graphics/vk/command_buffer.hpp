@@ -14,8 +14,11 @@ public:
   void bind_pipeline(VkPipeline pipeline);
   void bind_vertex_buffers(
       uint32_t first_binding, uint32_t binding_count, const VkBuffer *buffers);
+  void bind_index_buffer(VkBuffer buffer);
   void draw(uint32_t vertex_count, uint32_t instance_count,
       uint32_t first_vertex, uint32_t first_instance);
+  void draw_indexed(uint32_t index_count, uint32_t instance_count,
+      uint32_t first_index, int32_t vertex_offset, uint32_t first_instance);
 
 private:
   VkCommandBuffer buffer_;

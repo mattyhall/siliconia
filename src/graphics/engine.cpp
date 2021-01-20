@@ -15,9 +15,7 @@ namespace siliconia::graphics {
 struct colour {
   colour(uint8_t r, uint8_t g, uint8_t b) : r(r), g(g), b(b) {}
 
-  glm::vec3 to_glm() {
-    return {r / 255.0, g / 255.0, b / 255.0};
-  }
+  glm::vec3 to_glm() { return {r / 255.0, g / 255.0, b / 255.0}; }
 
   uint8_t r, g, b;
 };
@@ -29,7 +27,7 @@ struct gradient_point {
   colour colour;
 };
 
-template<size_t N>
+template <size_t N>
 colour get_colour(const std::array<gradient_point, N> &gradient,
     float nodata_value, chunks::range range, float val)
 {
@@ -65,6 +63,8 @@ Engine::~Engine()
   vkWaitForFences(device_, 1, &render_fence_, true, 1e9);
 
   for (const auto &mesh : meshes_) {
+    vmaDestroyBuffer(
+        allocator_, mesh.index_buffer.buffer, mesh.index_buffer.allocation);
     vmaDestroyBuffer(
         allocator_, mesh.vertex_buffer.buffer, mesh.vertex_buffer.allocation);
   }
@@ -146,7 +146,8 @@ void Engine::run()
 
       for (const auto &mesh : meshes_) {
         rp.bind_vertex_buffers(0, 1, &mesh.vertex_buffer.buffer);
-        rp.draw(mesh.vertices.size(), 1, 0, 0);
+        rp.bind_index_buffer(mesh.index_buffer.buffer);
+        rp.draw_indexed(mesh.indices.size(), 1, 0, 0, 0);
       }
     }
 
@@ -177,70 +178,12 @@ void Engine::run()
     if (frame_number % 30 == 0) {
       auto now = std::chrono::system_clock::now();
       auto elapsed = now - start;
-      auto mili = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+      auto mili =
+          std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
       std::cout << "fps: " << 30.0 / ((float)mili.count() / 1000) << std::endl;
       start = now;
     }
   }
-}
-
-void Engine::draw(SDL_Renderer *renderer)
-{
-  auto chunks = chunks_;
-  auto gradient =
-      std::array<gradient_point, 2>{{{0.0, {0, 0, 0}}, {1.0, {255, 0, 0}}}};
-
-  auto cell_size = chunks.chunks()[0].cell_size;
-  auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-      SDL_TEXTUREACCESS_TARGET, chunks.rect.width / cell_size,
-      chunks.rect.height / cell_size);
-
-  SDL_SetRenderTarget(renderer, texture);
-  SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-  SDL_RenderClear(renderer);
-
-  auto range = chunks.range;
-
-  for (const auto &chunk : chunks.chunks()) {
-    auto x_offset = (chunk.rect().x - chunks.rect.x) / cell_size;
-    auto y_offset = chunks.rect.height / cell_size -
-                    (chunk.rect().y - chunks.rect.y) / cell_size -
-                    chunk.rect().height / cell_size;
-
-    for (unsigned int j = 0; j < chunk.nrows; j++) {
-      for (unsigned int i = 0; i < chunk.ncols; i++) {
-        auto val = chunk.data[i + j * chunk.ncols];
-        if (val != chunk.nodata_value) {
-          auto scaled = val / range.size();
-          for (int g = 0; g < gradient.size(); g++) {
-            auto pt = gradient[g];
-            if (g == gradient.size() - 1) {
-              SDL_SetRenderDrawColor(
-                  renderer, pt.colour.r, pt.colour.g, pt.colour.b, 255);
-            } else if (scaled >= pt.point && scaled < gradient[g + 1].point) {
-              auto pt_next = gradient[g + 1];
-              auto n = (scaled - pt.point) / (pt_next.point - pt.point);
-              SDL_SetRenderDrawColor(renderer,
-                  pt.colour.r + (pt_next.colour.r - pt.colour.r) * n,
-                  pt.colour.g + (pt_next.colour.g - pt.colour.g) * n,
-                  pt.colour.b + (pt_next.colour.b - pt.colour.b) * n, 255);
-              break;
-            }
-          }
-        } else {
-          SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        }
-        SDL_RenderDrawPoint(renderer, x_offset + i, y_offset + j);
-      }
-    }
-
-    break;
-  }
-
-  SDL_SetRenderTarget(renderer, nullptr);
-  SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-
-  SDL_RenderPresent(renderer);
 }
 
 void Engine::init_vulkan()
@@ -464,40 +407,36 @@ void Engine::load_meshes()
                     (chunk.rect().y - chunks_.rect.y) / cell_size -
                     chunk.rect().height / cell_size;
 
-    for (unsigned int j = 0; j < chunk.nrows - 1; j++) {
-      for (unsigned int i = 0; i < chunk.ncols - 1; i++) {
-        auto vlt = chunk.data[i + j * chunk.ncols];
-        auto vrt = chunk.data[i + 1 + j * chunk.ncols];
-        auto vrb = chunk.data[i + 1 + (j + 1) * chunk.ncols];
-        auto vlb = chunk.data[i + (j + 1) * chunk.ncols];
-        auto clt = get_colour(gradient, chunk.nodata_value, range, vlt);
-        auto crt = get_colour(gradient, chunk.nodata_value, range, vrt);
-        auto crb = get_colour(gradient, chunk.nodata_value, range, vrb);
-        auto clb = get_colour(gradient, chunk.nodata_value, range, vlb);
+    for (unsigned int j = 0; j < chunk.nrows; j++) {
+      for (unsigned int i = 0; i < chunk.ncols; i++) {
+        auto v = chunk.data[i + j * chunk.ncols];
+        auto c = get_colour(gradient, chunk.nodata_value, range, v);
 
-        mesh.vertices.push_back(
-            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, clt.to_glm()});
-        mesh.vertices.push_back(
-            vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
-        mesh.vertices.push_back(
-            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
+        auto vert = vk::Vertex(
+            glm::vec3{(i + x_offset) * x_sf - 1, (j + y_offset) * y_sf - 1, 0},
+            c.to_glm());
+        mesh.vertices.push_back(std::move(vert));
 
-        mesh.vertices.push_back(
-            vk::Vertex{{(i + x_offset + 1) * x_sf - 1, (j + y_offset) * y_sf - 1, 0}, crt.to_glm()});
-        mesh.vertices.push_back(vk::Vertex{
-            {(i + x_offset + 1) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, crb.to_glm()});
-        mesh.vertices.push_back(
-            vk::Vertex{{(i + x_offset) * x_sf - 1, (j + y_offset + 1) * y_sf - 1, 0}, clb.to_glm()});
+        if (i < chunk.ncols - 1 && j < chunk.nrows - 1) {
+          mesh.indices.push_back(i + j * chunk.ncols);       // tl
+          mesh.indices.push_back((i + 1) + j * chunk.ncols); // tr
+          mesh.indices.push_back(i + (j + 1) * chunk.ncols); // bl
+
+          mesh.indices.push_back((i + 1) + j * chunk.ncols);       // tr
+          mesh.indices.push_back((i + 1) + (j + 1) * chunk.ncols); // br
+          mesh.indices.push_back(i + (j + 1) * chunk.ncols);       // bl
+        }
       }
     }
+
     upload_mesh(mesh);
     meshes_.push_back(std::move(mesh));
   }
-
 }
 
 void Engine::upload_mesh(vk::Mesh &mesh)
 {
+  // Vertices
   auto buffer_info = VkBufferCreateInfo{};
   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   buffer_info.size = mesh.vertices.size() * sizeof(vk::Vertex);
@@ -512,6 +451,16 @@ void Engine::upload_mesh(vk::Mesh &mesh)
   vmaMapMemory(allocator_, mesh.vertex_buffer.allocation, &data);
   memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(vk::Vertex));
   vmaUnmapMemory(allocator_, mesh.vertex_buffer.allocation);
+
+  // Indices
+  buffer_info.size = mesh.indices.size() * sizeof(uint32_t);
+  buffer_info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  VK_CHECK(vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
+      &mesh.index_buffer.buffer, &mesh.index_buffer.allocation, nullptr));
+
+  vmaMapMemory(allocator_, mesh.index_buffer.allocation, &data);
+  memcpy(data, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
+  vmaUnmapMemory(allocator_, mesh.index_buffer.allocation);
 }
 
 } // namespace siliconia::graphics

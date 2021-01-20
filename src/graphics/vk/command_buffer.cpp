@@ -25,10 +25,24 @@ void RenderPassGuard::bind_vertex_buffers(
       buffer_, first_binding, binding_count, buffers, &offset);
 }
 
+void RenderPassGuard::bind_index_buffer(VkBuffer buffer)
+{
+  vkCmdBindIndexBuffer(buffer_, buffer, 0, VK_INDEX_TYPE_UINT32);
+}
+
 void RenderPassGuard::draw(uint32_t vertex_count, uint32_t instance_count,
     uint32_t first_vertex, uint32_t first_instance)
 {
-  vkCmdDraw(buffer_, vertex_count, instance_count, first_vertex, first_instance);
+  vkCmdDraw(
+      buffer_, vertex_count, instance_count, first_vertex, first_instance);
+}
+
+void RenderPassGuard::draw_indexed(uint32_t index_count,
+    uint32_t instance_count, uint32_t first_index, int32_t vertex_offset,
+    uint32_t first_instance)
+{
+  vkCmdDrawIndexed(buffer_, index_count, instance_count, first_index,
+      vertex_offset, first_instance);
 }
 
 CommandBufferGuard::CommandBufferGuard(VkCommandBuffer buffer) : buffer_(buffer)
