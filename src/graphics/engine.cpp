@@ -145,10 +145,14 @@ void Engine::run()
           framebuffers_[swapchain_image_index], clear_val);
       rp.bind_pipeline(pipeline_);
 
+      glm::mat4 view = glm::lookAt(
+          glm::vec3{100.f, 4000.f, -100.f}, {5.0 * 500.f / 2.0, 0.f, 5.0 * 500.f / 2.0}, {0.f, -1.f, 0.f});
+      auto proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10000000000.0f);
+
       for (const auto &mesh : meshes_) {
         rp.bind_vertex_buffers(0, 1, &mesh.vertex_buffer.buffer);
         rp.bind_index_buffer(mesh.index_buffer.buffer);
-        auto constant = vk::MeshPushConstants{mesh.model_matrix};
+        auto constant = vk::MeshPushConstants{proj * view * mesh.model_matrix};
         rp.push_constants(pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT,
             sizeof(vk::MeshPushConstants), &constant);
         rp.draw_indexed(mesh.indices.size(), 1, 0, 0, 0);
@@ -410,12 +414,12 @@ void Engine::load_meshes()
   auto cell_size = chunks_.chunks()[0].cell_size;
   auto range = chunks_.range;
   auto x_sf = 2.0f / ((float)chunks_.rect.width / cell_size);
-  auto y_sf = 2.0f / ((float)chunks_.rect.height / cell_size);
+  auto z_sf = 2.0f / ((float)chunks_.rect.height / cell_size);
 
   for (const auto &chunk : chunks_.chunks()) {
     auto mesh = vk::Mesh{};
     auto x_offset = (chunk.rect().x - chunks_.rect.x) / cell_size;
-    auto y_offset = chunks_.rect.height / cell_size -
+    auto z_offset = chunks_.rect.height / cell_size -
                     (chunk.rect().y - chunks_.rect.y) / cell_size -
                     chunk.rect().height / cell_size;
 
@@ -424,7 +428,7 @@ void Engine::load_meshes()
         auto v = chunk.data[i + j * chunk.ncols];
         auto c = get_colour(gradient, chunk.nodata_value, range, v);
 
-        auto vert = vk::Vertex(glm::vec3{i, j, 0}, c.to_glm());
+        auto vert = vk::Vertex(glm::vec3{i, 0, j}, c.to_glm());
         mesh.vertices.push_back(std::move(vert));
 
         if (i < chunk.ncols - 1 && j < chunk.nrows - 1) {
@@ -438,10 +442,7 @@ void Engine::load_meshes()
         }
       }
     }
-    auto translate = glm::translate(glm::mat4(1), {x_offset, y_offset, 0});
-    auto scale = glm::scale(glm::mat4(1), {x_sf, y_sf, 1.0});
-    mesh.model_matrix =
-        glm::translate(glm::mat4(1), {-1, -1, 0}) * scale * translate;
+    mesh.model_matrix = glm::translate(glm::mat4(1), {x_offset, 0, z_offset});
 
     upload_mesh(mesh);
     meshes_.push_back(std::move(mesh));
