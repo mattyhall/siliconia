@@ -45,6 +45,11 @@ void RenderPassGuard::draw_indexed(uint32_t index_count,
       vertex_offset, first_instance);
 }
 
+void RenderPassGuard::push_constants(VkPipelineLayout layout, VkShaderStageFlags flags, size_t size, const void *ptr)
+{
+  vkCmdPushConstants(buffer_, layout, flags, 0, size, ptr);
+}
+
 CommandBufferGuard::CommandBufferGuard(VkCommandBuffer buffer) : buffer_(buffer)
 {
 }

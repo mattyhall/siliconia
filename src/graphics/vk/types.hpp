@@ -5,6 +5,7 @@
 #include <vk_mem_alloc.h>
 #include <vector>
 #include <glm/vec3.hpp>
+#include <glm/mat4x4.hpp>
 
 namespace siliconia::graphics::vk {
 
@@ -32,6 +33,12 @@ struct Mesh {
 
   std::vector<uint32_t> indices;
   AllocatorBuffer index_buffer;
+
+  glm::mat4 model_matrix;
+};
+
+struct MeshPushConstants {
+  glm::mat4 model_matrix;
 };
 
 }

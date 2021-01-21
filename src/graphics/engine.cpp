@@ -5,6 +5,8 @@
 #include <SDL_vulkan.h>
 #include <array>
 #include <fstream>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
 #include <iostream>
 
 #define VMA_IMPLEMENTATION
@@ -115,7 +117,6 @@ void Engine::init()
 void Engine::run()
 {
   auto e = SDL_Event{};
-  auto renderer = SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED);
 
   uint32_t frame_number = 0;
 
@@ -147,6 +148,9 @@ void Engine::run()
       for (const auto &mesh : meshes_) {
         rp.bind_vertex_buffers(0, 1, &mesh.vertex_buffer.buffer);
         rp.bind_index_buffer(mesh.index_buffer.buffer);
+        auto constant = vk::MeshPushConstants{mesh.model_matrix};
+        rp.push_constants(pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT,
+            sizeof(vk::MeshPushConstants), &constant);
         rp.draw_indexed(mesh.indices.size(), 1, 0, 0, 0);
       }
     }
@@ -347,6 +351,14 @@ void Engine::init_piplines()
   }
 
   auto layout_info = vk::pipeline_layout_create_info();
+
+  auto push_constant = VkPushConstantRange{};
+  push_constant.size = sizeof(vk::MeshPushConstants);
+  push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+  layout_info.pPushConstantRanges = &push_constant;
+  layout_info.pushConstantRangeCount = 1;
+
   VK_CHECK(vkCreatePipelineLayout(
       device_, &layout_info, nullptr, &pipeline_layout_));
 
@@ -412,9 +424,7 @@ void Engine::load_meshes()
         auto v = chunk.data[i + j * chunk.ncols];
         auto c = get_colour(gradient, chunk.nodata_value, range, v);
 
-        auto vert = vk::Vertex(
-            glm::vec3{(i + x_offset) * x_sf - 1, (j + y_offset) * y_sf - 1, 0},
-            c.to_glm());
+        auto vert = vk::Vertex(glm::vec3{i, j, 0}, c.to_glm());
         mesh.vertices.push_back(std::move(vert));
 
         if (i < chunk.ncols - 1 && j < chunk.nrows - 1) {
@@ -428,6 +438,10 @@ void Engine::load_meshes()
         }
       }
     }
+    auto translate = glm::translate(glm::mat4(1), {x_offset, y_offset, 0});
+    auto scale = glm::scale(glm::mat4(1), {x_sf, y_sf, 1.0});
+    mesh.model_matrix =
+        glm::translate(glm::mat4(1), {-1, -1, 0}) * scale * translate;
 
     upload_mesh(mesh);
     meshes_.push_back(std::move(mesh));
