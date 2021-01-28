@@ -1,11 +1,12 @@
 #ifndef SILICONIA_TYPES_HPP
 #define SILICONIA_TYPES_HPP
 
-#include <vulkan/vulkan.h>
-#include <vk_mem_alloc.h>
-#include <vector>
-#include <glm/vec3.hpp>
+#include "command_buffer.hpp"
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
+#include <vector>
+#include <vk_mem_alloc.h>
+#include <vulkan/vulkan.h>
 
 namespace siliconia::graphics::vk {
 
@@ -46,6 +47,11 @@ struct AllocatedImage {
   VkImage image;
   VmaAllocation allocation;
 };
-}
 
+struct UploadContext {
+  VkFence upload_fence;
+  CommandPool command_pool;
+};
+
+}
 #endif // SILICONIA_TYPES_HPP

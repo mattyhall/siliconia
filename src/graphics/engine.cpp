@@ -13,6 +13,9 @@
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
+#include <imgui.h>
+#include <imgui_impl_sdl.h>
+#include <imgui_impl_vulkan.h>
 
 namespace siliconia::graphics {
 
@@ -68,6 +71,9 @@ Engine::~Engine()
 {
   vkWaitForFences(device_, 1, &render_fence_, true, 1e9);
 
+  vkDestroyDescriptorPool(device_, imgui_pool_, nullptr);
+  ImGui_ImplVulkan_Shutdown();
+
   for (const auto &mesh : meshes_) {
     vmaDestroyBuffer(
         allocator_, mesh.index_buffer.buffer, mesh.index_buffer.allocation);
@@ -81,8 +87,10 @@ Engine::~Engine()
   vkDestroySemaphore(device_, present_semaphore_, nullptr);
   vkDestroySemaphore(device_, render_semaphore_, nullptr);
   vkDestroyFence(device_, render_fence_, nullptr);
+  vkDestroyFence(device_, upload_context_.upload_fence, nullptr);
 
   vkDestroyCommandPool(device_, command_pool_.pool(), nullptr);
+  vkDestroyCommandPool(device_, upload_context_.command_pool.pool(), nullptr);
 
   vkDestroyImageView(device_, depth_image_view_, nullptr);
   vmaDestroyImage(allocator_, depth_image_.image, depth_image_.allocation);
@@ -119,6 +127,7 @@ void Engine::init()
   init_sync_structures();
   init_pipelines();
   load_meshes();
+  init_imgui();
 }
 
 void Engine::run()
@@ -129,15 +138,26 @@ void Engine::run()
 
   auto start = std::chrono::system_clock::now();
 
+  std::cout << "Running" << std::endl;
+
   while (true) {
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT) {
         return;
       }
+      ImGui_ImplSDL2_ProcessEvent(&e);
       camera_.handle_input(e);
     }
 
     camera_.update();
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL2_NewFrame(window_);
+    ImGui::NewFrame();
+    ImGui::ShowDemoWindow();
+
+
+    ImGui::Render();
 
     VK_CHECK(vkWaitForFences(device_, 1, &render_fence_, true, 1e9));
     VK_CHECK(vkResetFences(device_, 1, &render_fence_));
@@ -149,6 +169,7 @@ void Engine::run()
 
     {
       auto cmd_guard = main_command_buffer_.begin();
+
       auto clear_val = VkClearValue{};
       auto flash = std::abs(std::sin(frame_number / 120.f));
       clear_val.color = {{0.0f, 0.0f, flash, 1.0f}};
@@ -173,6 +194,9 @@ void Engine::run()
             sizeof(vk::MeshPushConstants), &constant);
         rp.draw_indexed(mesh.indices.size(), 1, 0, 0, 0);
       }
+
+      ImGui_ImplVulkan_RenderDrawData(
+          ImGui::GetDrawData(), main_command_buffer_.buffer());
     }
 
     auto submit_info = VkSubmitInfo{};
@@ -281,6 +305,9 @@ void Engine::init_commands()
 {
   command_pool_ = vk::CommandPool{device_, graphics_queue_family_};
   main_command_buffer_ = command_pool_.allocate_buffer();
+
+  upload_context_.command_pool =
+      vk::CommandPool{device_, graphics_queue_family_};
 }
 
 void Engine::init_default_renderpass()
@@ -361,18 +388,20 @@ void Engine::init_sync_structures()
 {
   auto fence_create_info = VkFenceCreateInfo{};
   fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  fence_create_info.pNext = nullptr;
   fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
   VK_CHECK(vkCreateFence(device_, &fence_create_info, nullptr, &render_fence_));
 
   auto semaphore_create_info = VkSemaphoreCreateInfo{};
   semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  semaphore_create_info.pNext = nullptr;
-  semaphore_create_info.flags = 0;
   VK_CHECK(vkCreateSemaphore(
       device_, &semaphore_create_info, nullptr, &present_semaphore_));
   VK_CHECK(vkCreateSemaphore(
       device_, &semaphore_create_info, nullptr, &render_semaphore_));
+
+  auto upload_fence_create_info = VkFenceCreateInfo{};
+  upload_fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  VK_CHECK(vkCreateFence(device_, &upload_fence_create_info, nullptr,
+      &upload_context_.upload_fence));
 }
 
 bool Engine::load_shader_module(const char *path, VkShaderModule *shader_module)
@@ -465,6 +494,52 @@ void Engine::init_pipelines()
   vkDestroyShaderModule(device_, frag, nullptr);
 }
 
+void Engine::init_imgui()
+{
+  VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+      {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+      {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
+
+  auto pool_info = VkDescriptorPoolCreateInfo{};
+  pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  pool_info.maxSets = 1000;
+  pool_info.poolSizeCount = std::size(pool_sizes);
+  pool_info.pPoolSizes = pool_sizes;
+
+  VK_CHECK(vkCreateDescriptorPool(device_, &pool_info, nullptr, &imgui_pool_));
+
+  ImGui::CreateContext();
+
+  // this initializes imgui for SDL
+  ImGui_ImplSDL2_InitForVulkan(window_);
+
+  auto init_info = ImGui_ImplVulkan_InitInfo{};
+  init_info.Instance = instance_;
+  init_info.PhysicalDevice = chosen_gpu_;
+  init_info.Device = device_;
+  init_info.Queue = graphics_queue_;
+  init_info.DescriptorPool = imgui_pool_;
+  init_info.MinImageCount = 3;
+  init_info.ImageCount = 3;
+
+  ImGui_ImplVulkan_Init(&init_info, renderpass_);
+
+  immediate_submit([&](auto buf) {
+    ImGui_ImplVulkan_CreateFontsTexture(buf);
+  });
+
+  ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+
 void Engine::load_meshes()
 {
   auto gradient =
@@ -535,6 +610,29 @@ void Engine::upload_mesh(vk::Mesh &mesh)
   vmaMapMemory(allocator_, mesh.index_buffer.allocation, &data);
   memcpy(data, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
   vmaUnmapMemory(allocator_, mesh.index_buffer.allocation);
+}
+
+void Engine::immediate_submit(std::function<void(VkCommandBuffer)> &&function)
+{
+  auto buf = upload_context_.command_pool.allocate_buffer();
+
+  {
+    auto guard = buf.begin();
+    function(buf.buffer());
+  }
+
+  auto submit_info = VkSubmitInfo{};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = 1;
+  auto b = buf.buffer();
+  submit_info.pCommandBuffers = &b;
+  VK_CHECK(vkQueueSubmit(
+      graphics_queue_, 1, &submit_info, upload_context_.upload_fence));
+
+  vkWaitForFences(device_, 1, &upload_context_.upload_fence, true, 9999999999);
+  vkResetFences(device_, 1, &upload_context_.upload_fence);
+
+  upload_context_.command_pool.reset();
 }
 
 } // namespace siliconia::graphics

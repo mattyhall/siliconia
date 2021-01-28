@@ -9,6 +9,7 @@
 #include <graphics/vk/types.hpp>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
+#include <functional>
 
 namespace siliconia::graphics {
 
@@ -29,8 +30,10 @@ private:
   void init_sync_structures();
   bool load_shader_module(const char *path, VkShaderModule *shader_module);
   void init_pipelines();
+  void init_imgui();
   void load_meshes();
   void upload_mesh(vk::Mesh &mesh);
+  void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
   VkExtent2D  win_size_;
   SDL_Window *window_;
@@ -72,6 +75,10 @@ private:
   VmaAllocator allocator_;
 
   std::vector<vk::Mesh> meshes_;
+
+  vk::UploadContext upload_context_;
+
+  VkDescriptorPool imgui_pool_;
 };
 
 } // namespace siliconia::graphics

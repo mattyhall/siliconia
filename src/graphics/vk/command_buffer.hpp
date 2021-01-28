@@ -81,6 +81,8 @@ public:
 
   VkCommandPool pool() const;
 
+  void reset();
+
 private:
   VkDevice device_;
   uint32_t family_;

@@ -77,8 +77,6 @@ CommandBufferGuard CommandBuffer::begin()
 {
   auto cmd_begin_info = VkCommandBufferBeginInfo{};
   cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  cmd_begin_info.pNext = nullptr;
-  cmd_begin_info.pInheritanceInfo = nullptr;
   cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
   VK_CHECK(vkBeginCommandBuffer(buffer_, &cmd_begin_info));
@@ -113,4 +111,9 @@ VkCommandPool CommandPool::pool() const
 {
   return pool_;
 }
+void CommandPool::reset()
+{
+  vkResetCommandPool(device_, pool_, 0);
+}
+
 } // namespace siliconia::graphics::vk
