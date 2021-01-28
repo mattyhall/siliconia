@@ -1,7 +1,7 @@
 add_executable(siliconia main.cpp
         chunks/chunk.cpp chunks/chunk_collection.cpp
         graphics/engine.cpp graphics/engine.hpp
-        graphics/vk/pipeline_builder.cpp graphics/vk/pipeline_builder.hpp graphics/vk/init.hpp graphics/vk/init.cpp graphics/vk/types.cpp graphics/vk/types.hpp graphics/vk/command_buffer.cpp graphics/vk/command_buffer.hpp graphics/vk/helpers.hpp)
+        graphics/vk/pipeline_builder.cpp graphics/vk/pipeline_builder.hpp graphics/vk/init.hpp graphics/vk/init.cpp graphics/vk/types.cpp graphics/vk/types.hpp graphics/vk/command_buffer.cpp graphics/vk/command_buffer.hpp graphics/vk/helpers.hpp graphics/camera.cpp graphics/camera.hpp)
 
 target_compile_features(siliconia PUBLIC cxx_std_20)
 

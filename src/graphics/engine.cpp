@@ -58,7 +58,9 @@ colour get_colour(const std::array<gradient_point, N> &gradient,
 
 Engine::Engine(
     uint32_t width, uint32_t height, chunks::ChunkCollection &&chunks)
-  : win_size_({width, height}), chunks_(chunks)
+  : win_size_({width, height})
+  , chunks_(chunks)
+  , camera_({100.f, -200.f, -100.f}, {5.0 * 250, 0.0, 5 * 250}, {0.f, 1.f, 0.f})
 {
 }
 
@@ -86,7 +88,6 @@ Engine::~Engine()
   vmaDestroyImage(allocator_, depth_image_.image, depth_image_.allocation);
 
   vmaDestroyAllocator(allocator_);
-
 
   vkDestroySwapchainKHR(device_, swapchain_, nullptr);
   vkDestroyRenderPass(device_, renderpass_, nullptr);
@@ -130,9 +131,13 @@ void Engine::run()
 
   while (true) {
     while (SDL_PollEvent(&e) != 0) {
-      if (e.type == SDL_QUIT)
+      if (e.type == SDL_QUIT) {
         return;
+      }
+      camera_.handle_input(e);
     }
+
+    camera_.update();
 
     VK_CHECK(vkWaitForFences(device_, 1, &render_fence_, true, 1e9));
     VK_CHECK(vkResetFences(device_, 1, &render_fence_));
@@ -152,12 +157,11 @@ void Engine::run()
       clear_depth_val.depthStencil.depth = 1.0f;
 
       auto clears = std::array{clear_val, clear_depth_val};
-      auto rp = cmd_guard.begin_render_pass(renderpass_, win_size_,
-          framebuffers_[swapchain_image_index], clears);
+      auto rp = cmd_guard.begin_render_pass(
+          renderpass_, win_size_, framebuffers_[swapchain_image_index], clears);
       rp.bind_pipeline(pipeline_);
 
-      glm::mat4 view = glm::lookAt(glm::vec3{100.f, -200.f, -100.f},
-          {5.0 * 500.f / 2.0, 0.f, 5.0 * 500.f / 2.0}, {0.f, 1.f, 0.f});
+      auto view = camera_.matrix();
       auto proj =
           glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10000000000.0f);
 

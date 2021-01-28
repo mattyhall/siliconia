@@ -1,6 +1,7 @@
 #ifndef SILICONIA_ENGINE_HPP
 #define SILICONIA_ENGINE_HPP
 
+#include "camera.hpp"
 #include "graphics/vk/init.hpp"
 #include <SDL.h>
 #include <chunks/chunk_collection.hpp>
@@ -33,6 +34,8 @@ private:
 
   VkExtent2D  win_size_;
   SDL_Window *window_;
+
+  camera camera_;
 
   chunks::ChunkCollection chunks_;
 
