@@ -1,6 +1,7 @@
 #ifndef SILICONIA_COMMAND_BUFFER_HPP
 #define SILICONIA_COMMAND_BUFFER_HPP
 
+#include <array>
 #include <cstdint>
 #include <vulkan/vulkan.h>
 
@@ -32,8 +33,23 @@ public:
 
   ~CommandBufferGuard();
 
+  template <size_t N>
   RenderPassGuard begin_render_pass(VkRenderPass pass, VkExtent2D extent,
-      VkFramebuffer framebuffer, const VkClearValue &clear_value);
+      VkFramebuffer framebuffer, std::array<VkClearValue, N> clear_values)
+  {
+    auto rp_info = VkRenderPassBeginInfo{};
+    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rp_info.pNext = nullptr;
+    rp_info.renderPass = pass;
+    rp_info.renderArea.offset = {0, 0};
+    rp_info.renderArea.extent = extent;
+    rp_info.framebuffer = framebuffer;
+    rp_info.clearValueCount = N;
+    rp_info.pClearValues = &clear_values[0];
+    vkCmdBeginRenderPass(buffer_, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    return RenderPassGuard{buffer_};
+  }
 
 private:
   VkCommandBuffer buffer_;

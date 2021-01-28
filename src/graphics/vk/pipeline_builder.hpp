@@ -19,6 +19,7 @@ public:
   VkPipelineColorBlendAttachmentState colour_blend_attachment;
   VkPipelineMultisampleStateCreateInfo multisampling;
   VkPipelineLayout layout;
+  VkPipelineDepthStencilStateCreateInfo  depth_stencil;
 };
 
 }

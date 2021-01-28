@@ -41,6 +41,11 @@ struct MeshPushConstants {
   glm::mat4 model_matrix;
 };
 
+
+struct AllocatedImage {
+  VkImage image;
+  VmaAllocation allocation;
+};
 }
 
 #endif // SILICONIA_TYPES_HPP

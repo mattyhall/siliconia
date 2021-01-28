@@ -27,7 +27,7 @@ private:
   void init_framebuffers();
   void init_sync_structures();
   bool load_shader_module(const char *path, VkShaderModule *shader_module);
-  void init_piplines();
+  void init_pipelines();
   void load_meshes();
   void upload_mesh(vk::Mesh &mesh);
 
@@ -46,6 +46,10 @@ private:
   VkFormat swapchain_image_format_;
   std::vector<VkImage> swapchain_images_;
   std::vector<VkImageView> swapchain_image_views_;
+
+  VkImageView depth_image_view_;
+  vk::AllocatedImage depth_image_;
+  VkFormat depth_format_;
 
   VkQueue graphics_queue_;
   uint32_t  graphics_queue_family_;

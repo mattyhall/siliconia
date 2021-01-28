@@ -59,24 +59,6 @@ CommandBufferGuard::~CommandBufferGuard()
   VK_CHECK(vkEndCommandBuffer(buffer_));
 }
 
-RenderPassGuard CommandBufferGuard::begin_render_pass(VkRenderPass pass,
-    VkExtent2D extent, VkFramebuffer framebuffer,
-    const VkClearValue &clear_value)
-{
-  auto rp_info = VkRenderPassBeginInfo{};
-  rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  rp_info.pNext = nullptr;
-  rp_info.renderPass = pass;
-  rp_info.renderArea.offset = {0, 0};
-  rp_info.renderArea.extent = extent;
-  rp_info.framebuffer = framebuffer;
-  rp_info.clearValueCount = 1;
-  rp_info.pClearValues = &clear_value;
-  vkCmdBeginRenderPass(buffer_, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
-
-  return RenderPassGuard{buffer_};
-}
-
 CommandBuffer::CommandBuffer(VkCommandBuffer buffer) : buffer_(buffer)
 {
 }

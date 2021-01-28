@@ -1,3 +1,5 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include "engine.hpp"
 #include "VkBootstrap.h"
 #include "vk/helpers.hpp"
@@ -71,8 +73,6 @@ Engine::~Engine()
         allocator_, mesh.vertex_buffer.buffer, mesh.vertex_buffer.allocation);
   }
 
-  vmaDestroyAllocator(allocator_);
-
   vkDestroyPipeline(device_, pipeline_, nullptr);
   vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
 
@@ -81,6 +81,12 @@ Engine::~Engine()
   vkDestroyFence(device_, render_fence_, nullptr);
 
   vkDestroyCommandPool(device_, command_pool_.pool(), nullptr);
+
+  vkDestroyImageView(device_, depth_image_view_, nullptr);
+  vmaDestroyImage(allocator_, depth_image_.image, depth_image_.allocation);
+
+  vmaDestroyAllocator(allocator_);
+
 
   vkDestroySwapchainKHR(device_, swapchain_, nullptr);
   vkDestroyRenderPass(device_, renderpass_, nullptr);
@@ -110,7 +116,7 @@ void Engine::init()
   init_default_renderpass();
   init_framebuffers();
   init_sync_structures();
-  init_piplines();
+  init_pipelines();
   load_meshes();
 }
 
@@ -141,13 +147,19 @@ void Engine::run()
       auto clear_val = VkClearValue{};
       auto flash = std::abs(std::sin(frame_number / 120.f));
       clear_val.color = {{0.0f, 0.0f, flash, 1.0f}};
+
+      auto clear_depth_val = VkClearValue{};
+      clear_depth_val.depthStencil.depth = 1.0f;
+
+      auto clears = std::array{clear_val, clear_depth_val};
       auto rp = cmd_guard.begin_render_pass(renderpass_, win_size_,
-          framebuffers_[swapchain_image_index], clear_val);
+          framebuffers_[swapchain_image_index], clears);
       rp.bind_pipeline(pipeline_);
 
-      glm::mat4 view = glm::lookAt(
-          glm::vec3{100.f, 4000.f, -100.f}, {5.0 * 500.f / 2.0, 0.f, 5.0 * 500.f / 2.0}, {0.f, -1.f, 0.f});
-      auto proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10000000000.0f);
+      glm::mat4 view = glm::lookAt(glm::vec3{100.f, -200.f, -100.f},
+          {5.0 * 500.f / 2.0, 0.f, 5.0 * 500.f / 2.0}, {0.f, 1.f, 0.f});
+      auto proj =
+          glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10000000000.0f);
 
       for (const auto &mesh : meshes_) {
         rp.bind_vertex_buffers(0, 1, &mesh.vertex_buffer.buffer);
@@ -240,6 +252,25 @@ void Engine::init_swapchain()
   swapchain_images_ = swapchain.get_images().value();
   swapchain_image_views_ = swapchain.get_image_views().value();
   swapchain_image_format_ = swapchain.image_format;
+
+  auto depth_image_extent = VkExtent3D{win_size_.width, win_size_.height, 1};
+  depth_format_ = VK_FORMAT_D32_SFLOAT;
+  auto dimg_info = vk::image_create_info(depth_format_,
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depth_image_extent);
+
+  auto dimg_alloc_info = VmaAllocationCreateInfo{};
+  dimg_alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+  dimg_alloc_info.requiredFlags =
+      VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  vmaCreateImage(allocator_, &dimg_info, &dimg_alloc_info, &depth_image_.image,
+      &depth_image_.allocation, nullptr);
+
+  auto dview_info = vk::image_view_create_info(
+      depth_format_, depth_image_.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  VK_CHECK(
+      vkCreateImageView(device_, &dview_info, nullptr, &depth_image_view_));
 }
 
 void Engine::init_commands()
@@ -264,15 +295,34 @@ void Engine::init_default_renderpass()
   colour_attachment_ref.attachment = 0;
   colour_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+  auto depth_attachment = VkAttachmentDescription{};
+  depth_attachment.format = depth_format_;
+  depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  depth_attachment.finalLayout =
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+  auto depth_attachment_ref = VkAttachmentReference{};
+  depth_attachment_ref.attachment = 1;
+  depth_attachment_ref.layout =
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
   auto subpass = VkSubpassDescription{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colour_attachment_ref;
+  subpass.pDepthStencilAttachment = &depth_attachment_ref;
 
+  VkAttachmentDescription attachments[2] = {
+      colour_attachment, depth_attachment};
   auto renderpass_info = VkRenderPassCreateInfo{};
   renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  renderpass_info.attachmentCount = 1;
-  renderpass_info.pAttachments = &colour_attachment;
+  renderpass_info.attachmentCount = 2;
+  renderpass_info.pAttachments = &attachments[0];
   renderpass_info.subpassCount = 1;
   renderpass_info.pSubpasses = &subpass;
 
@@ -295,7 +345,9 @@ void Engine::init_framebuffers()
   framebuffers_ = std::vector<VkFramebuffer>(swapchain_image_count);
 
   for (int i = 0; i < swapchain_image_count; i++) {
-    fb_info.pAttachments = &swapchain_image_views_[i];
+    VkImageView attachments[2] = {swapchain_image_views_[i], depth_image_view_};
+    fb_info.pAttachments = &attachments[0];
+    fb_info.attachmentCount = 2;
     VK_CHECK(
         vkCreateFramebuffer(device_, &fb_info, nullptr, &framebuffers_[i]));
   }
@@ -343,7 +395,7 @@ bool Engine::load_shader_module(const char *path, VkShaderModule *shader_module)
   return true;
 }
 
-void Engine::init_piplines()
+void Engine::init_pipelines()
 {
   auto frag = VkShaderModule{};
   if (!load_shader_module("../shaders/triangle.frag.spv", &frag)) {
@@ -400,6 +452,9 @@ void Engine::init_piplines()
   builder.vertex_input_info.vertexBindingDescriptionCount =
       desc.bindings.size();
 
+  builder.depth_stencil =
+      vk::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
+
   pipeline_ = builder.build_pipeline(device_, renderpass_);
 
   vkDestroyShaderModule(device_, vertex, nullptr);
@@ -428,7 +483,7 @@ void Engine::load_meshes()
         auto v = chunk.data[i + j * chunk.ncols];
         auto c = get_colour(gradient, chunk.nodata_value, range, v);
 
-        auto vert = vk::Vertex(glm::vec3{i, 0, j}, c.to_glm());
+        auto vert = vk::Vertex(glm::vec3{i, -v, j}, c.to_glm());
         mesh.vertices.push_back(std::move(vert));
 
         if (i < chunk.ncols - 1 && j < chunk.nrows - 1) {
