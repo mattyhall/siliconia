@@ -140,7 +140,12 @@ void Engine::run()
 
   std::cout << "Running" << std::endl;
 
+  auto last_time = std::chrono::system_clock::now();
+  auto speed = camera_.speed();
+
   while (true) {
+    auto pos = camera_.pos();
+    auto pos_arr = std::array<float, 3>{pos.x, pos.y, pos.z};
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT) {
         return;
@@ -149,15 +154,46 @@ void Engine::run()
       camera_.handle_input(e);
     }
 
-    camera_.update();
+    auto now = std::chrono::system_clock::now();
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time);
+    last_time = now;
+    camera_.set_speed(speed);
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL2_NewFrame(window_);
     ImGui::NewFrame();
-    ImGui::ShowDemoWindow();
 
+    auto main_viewport = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(ImVec2(main_viewport->GetWorkSize().x - 200, main_viewport->GetWorkPos().y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(200, 175), ImGuiCond_Once);
+
+    if (ImGui::Begin("Quick cam", nullptr, 0)) {
+      ImGui::Text("Quick positions");
+      if (ImGui::Button("Above")) {
+        camera_ = camera{{5.0 * 250, -2500.0, 5 * 250}, {5 * 250, 0, 5 * 250.f},
+            {1.f, 0.f, 0.f}};
+      }
+      if (ImGui::Button("Perspective")) {
+        camera_ = camera{{100.f, -200.f, -100.f}, {5.0 * 250, 0.0, 5 * 250},
+            {0.f, 1.f, 0.f}};
+      }
+      if (ImGui::Button("Look at centre")) {
+        camera_.look_at({5 * 250, 0, 5 * 250.f});
+      }
+
+      ImGui::DragFloat3("Pos", pos_arr.data());
+
+      ImGui::Spacing();
+      ImGui::DragFloat("Speed", &speed, 5.0f, 0.1f, 3000.0f, "%.2f");
+    }
 
     ImGui::Render();
+
+    camera_.set_pos({pos_arr[0], pos_arr[1], pos_arr[2]});
+
+    camera_.update(elapsed.count() / 1000.f);
 
     VK_CHECK(vkWaitForFences(device_, 1, &render_fence_, true, 1e9));
     VK_CHECK(vkResetFences(device_, 1, &render_fence_));
@@ -533,9 +569,7 @@ void Engine::init_imgui()
 
   ImGui_ImplVulkan_Init(&init_info, renderpass_);
 
-  immediate_submit([&](auto buf) {
-    ImGui_ImplVulkan_CreateFontsTexture(buf);
-  });
+  immediate_submit([&](auto buf) { ImGui_ImplVulkan_CreateFontsTexture(buf); });
 
   ImGui_ImplVulkan_DestroyFontUploadObjects();
 }

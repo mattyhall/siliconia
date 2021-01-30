@@ -6,7 +6,11 @@
 namespace siliconia::graphics {
 
 camera::camera(glm::vec3 pos, glm::vec3 look_at, glm::vec3 up)
-  : pos_(pos), dir_(glm::normalize(look_at - pos)), up_(up), key_states_{false}
+  : pos_(pos)
+  , dir_(glm::normalize(look_at - pos))
+  , up_(up)
+  , key_states_{false}
+  , speed_(50)
 {
 }
 glm::mat4 camera::matrix() const
@@ -32,7 +36,7 @@ void camera::handle_input(const SDL_Event &e)
   key_states_[static_cast<size_t>(Keys::shift)] = mod_state & KMOD_LSHIFT;
 }
 
-void camera::update()
+void camera::update(float elapsed_s)
 {
   auto orth_dir = glm::cross(dir_, up_);
   auto move_dir = glm::vec3{0};
@@ -55,8 +59,50 @@ void camera::update()
     move_dir += up_;
   }
   if (move_dir != glm::vec3{0.f, 0.f, 0.f}) {
-    pos_ += glm::normalize(move_dir);
+    pos_ += glm::normalize(move_dir) * speed_ * elapsed_s;
   }
 }
 
+void camera::look_at(const glm::vec3 &at)
+{
+  dir_ = glm::normalize(at - pos_);
+}
+
+const glm::vec3 &camera::pos() const
+{
+  return pos_;
+}
+
+void camera::set_pos(const glm::vec3 &pos)
+{
+  pos_ = pos;
+}
+
+const glm::vec3 &camera::dir() const
+{
+  return dir_;
+}
+
+void camera::set_dir(const glm::vec3 &dir)
+{
+  dir_ = dir;
+}
+
+const glm::vec3 &camera::up() const
+{
+  return up_;
+}
+
+void camera::set_up(const glm::vec3 &up)
+{
+  up_ = up;
+}
+float camera::speed() const
+{
+  return speed_;
+}
+void camera::set_speed(float speed)
+{
+  speed_ = speed;
+}
 } // namespace siliconia::graphics
